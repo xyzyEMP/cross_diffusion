@@ -1,0 +1,27 @@
+_target_: nuplan.planning.scenario_builder.scenario_filter.ScenarioFilter
+_convert_: "all"
+
+# Use all available scenario types in mini split
+scenario_types: null
+
+# Do not specify scenario tokens, let filter discover from db files
+scenario_tokens: null
+
+# Do not restrict logs/maps
+log_names: null
+map_names: null
+
+# Number of scenarios
+num_scenarios_per_type: null
+limit_total_scenarios: 500
+# Keep same settings as official nuPlan configs
+timestamp_threshold_s: 15
+
+ego_displacement_minimum_m: null
+ego_start_speed_threshold: null
+ego_stop_speed_threshold: null
+speed_noise_tolerance: null
+
+expand_scenarios: false
+remove_invalid_goals: true
+shuffle: false
