@@ -1,0 +1,42 @@
+protocol_revision: v1.2.3
+stage: 03B
+claims:
+  car_dog_scientific: false
+paths:
+  project_root: ${PROJECT_ROOT}
+  tartan_root: ${TARTAN_ROOT}
+  nuplan_root: ${NUPLAN_ROOT}
+  source_args: ${SOURCE_ARGS}
+  source_checkpoint: ${SOURCE_CKPT}
+  output_root: ${OUTPUT_ROOT}
+  cf_pair_root: ${CF_PAIR_ROOT}
+protocol:
+  condition_mode: route_set
+  max_candidates: 6
+  num_points: 80
+  length_selection_stage: "03"
+seed: 20260912
+split_scope: [train, val]
+test_split_forbidden: true
+fixed_goal:
+  source: stage03_manifest_only
+  radius_m: 0.75
+simulation:
+  rate_hz: 10
+  horizon_steps: 80
+  replanning_interval_steps: 10
+termination:
+  no_progress_window: 10
+  no_progress_epsilon_m: 0.05
+robot_radius_m:
+  diff: 0.50
+  anymal: 0.35
+route_failure:
+  policy: safe_stop
+  retained_in_all_method_denominators: true
+  counted_as_collision: false
+  decision: D024
+policies: [shortest_path_follower, intentional_collision_policy, stop_policy, single_plan_map_reference]
+evaluation_only: true
+stage03_route_audit_jsonl: /tj-share/cross_diffusion_workdir/research_score_v1_2/01_data_audit_reviews/stage03_native_v123_remediation_review_20260911T172000Z/route_audit/route_audit.jsonl
+historical_oracle_reference: /tj-share/cross_diffusion_workdir/research_score_v1_2/00_baseline_freeze/stage02_remediation_final_transfer_primary_20260911T021214Z_nogit

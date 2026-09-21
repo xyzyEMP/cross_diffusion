@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+local.env
+.env
+
+# Checkpoints, caches, and experiment products stay on the shared data volume.
+checkpoints/*.pth
+tartan/cache/
+tartan/outputs/
+outputs/
+research_score_v1_2/
+*.pt
+*.npy
+*.npz
+*.parquet

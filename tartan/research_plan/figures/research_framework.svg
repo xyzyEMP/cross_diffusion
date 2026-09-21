@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset="1" stop-color="#eef5fb"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#175a9f"/>
+      <stop offset="1" stop-color="#2877bd"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#087f8c"/>
+      <stop offset="1" stop-color="#20a0a7"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c06420"/>
+      <stop offset="1" stop-color="#e08b3c"/>
+    </linearGradient>
+    <linearGradient id="bottom" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#165a9d"/>
+      <stop offset="0.5" stop-color="#087f8c"/>
+      <stop offset="1" stop-color="#c06420"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#17324d" flood-opacity="0.16"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ca1b3"/>
+    </marker>
+    <style>
+      text { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; }
+      .title { font-size: 48px; font-weight: 800; fill: #153e68; }
+      .subtitle { font-size: 22px; font-weight: 500; fill: #62778b; }
+      .head { font-size: 29px; font-weight: 800; fill: #ffffff; }
+      .question { font-size: 22px; font-weight: 700; fill: #ffffff; opacity: .92; }
+      .item-title { font-size: 25px; font-weight: 800; fill: #173e67; }
+      .item { font-size: 21px; font-weight: 500; fill: #344f67; }
+      .arrow-label { font-size: 22px; font-weight: 700; fill: #63798d; }
+      .bottom-title { font-size: 28px; font-weight: 800; fill: #ffffff; }
+      .chip { font-size: 18px; font-weight: 700; fill: #23435f; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+
+  <text x="800" y="66" text-anchor="middle" class="title">执行条件干预下的跨具身决策迁移与闭环控制</text>
+  <text x="800" y="105" text-anchor="middle" class="subtitle">一致性表征 · 具身在线适配 · 规划控制闭环</text>
+
+  <!-- Column 1 -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="150" width="430" height="635" rx="12" fill="#ffffff"/>
+    <rect x="55" y="150" width="430" height="132" rx="12" fill="url(#blue)"/>
+    <rect x="55" y="260" width="430" height="22" fill="url(#blue)"/>
+  </g>
+  <text x="270" y="195" text-anchor="middle" class="head">研究内容一</text>
+  <text x="270" y="235" text-anchor="middle" class="question">什么决策成分能够跨具身共享？</text>
+
+  <rect x="77" y="308" width="386" height="116" rx="8" fill="#eaf3fc" stroke="#b9d5ef"/>
+  <text x="270" y="346" text-anchor="middle" class="item-title">统一轨迹扩散表示</text>
+  <text x="270" y="382" text-anchor="middle" class="item">机体坐标、弧长重采样</text>
+  <text x="270" y="411" text-anchor="middle" class="item">平台均衡条件分布</text>
+
+  <rect x="77" y="443" width="386" height="133" rx="8" fill="#eaf3fc" stroke="#b9d5ef"/>
+  <text x="270" y="482" text-anchor="middle" class="item-title">共享—具身 Score 解耦</text>
+  <text x="270" y="520" text-anchor="middle" class="item">共享意图去噪场</text>
+  <text x="270" y="550" text-anchor="middle" class="item">具身残差 Adapter</text>
+
+  <rect x="77" y="595" width="386" height="165" rx="8" fill="#eaf3fc" stroke="#b9d5ef"/>
+  <text x="270" y="635" text-anchor="middle" class="item-title">受控干预与反事实验证</text>
+  <text x="270" y="674" text-anchor="middle" class="item">严格配对一致性 · 定向 Swap</text>
+  <text x="270" y="706" text-anchor="middle" class="item">分支辨识 · do(E) Sweep</text>
+  <text x="270" y="738" text-anchor="middle" class="item">Zero-shot / Few-shot</text>
+
+  <!-- Column 2 -->
+  <g filter="url(#shadow)">
+    <rect x="585" y="150" width="430" height="635" rx="12" fill="#ffffff"/>
+    <rect x="585" y="150" width="430" height="132" rx="12" fill="url(#teal)"/>
+    <rect x="585" y="260" width="430" height="22" fill="url(#teal)"/>
+  </g>
+  <text x="800" y="195" text-anchor="middle" class="head">研究内容二</text>
+  <text x="800" y="235" text-anchor="middle" class="question">新平台如何快速、稳定地适配？</text>
+
+  <rect x="607" y="308" width="386" height="116" rx="8" fill="#e8f7f6" stroke="#a9deda"/>
+  <text x="800" y="346" text-anchor="middle" class="item-title">少样本具身初始化</text>
+  <text x="800" y="382" text-anchor="middle" class="item">冻结共享 Score</text>
+  <text x="800" y="411" text-anchor="middle" class="item">轻量 LoRA / Adapter</text>
+
+  <rect x="607" y="443" width="386" height="133" rx="8" fill="#e8f7f6" stroke="#a9deda"/>
+  <text x="800" y="482" text-anchor="middle" class="item-title">在线执行能力辨识</text>
+  <text x="800" y="520" text-anchor="middle" class="item">规划—执行误差反馈</text>
+  <text x="800" y="550" text-anchor="middle" class="item">时变能力状态与不确定性</text>
+
+  <rect x="607" y="595" width="386" height="165" rx="8" fill="#e8f7f6" stroke="#a9deda"/>
+  <text x="800" y="635" text-anchor="middle" class="item-title">安全快—慢在线适配</text>
+  <text x="800" y="674" text-anchor="middle" class="item">快更新能力 · 慢更新参数</text>
+  <text x="800" y="706" text-anchor="middle" class="item">置信门控 · 风险回退</text>
+  <text x="800" y="738" text-anchor="middle" class="item">能力突变恢复</text>
+
+  <!-- Column 3 -->
+  <g filter="url(#shadow)">
+    <rect x="1115" y="150" width="430" height="635" rx="12" fill="#ffffff"/>
+    <rect x="1115" y="150" width="430" height="132" rx="12" fill="url(#orange)"/>
+    <rect x="1115" y="260" width="430" height="22" fill="url(#orange)"/>
+  </g>
+  <text x="1330" y="195" text-anchor="middle" class="head">研究内容三</text>
+  <text x="1330" y="235" text-anchor="middle" class="question">规划轨迹怎样可靠转化为动作？</text>
+
+  <rect x="1137" y="308" width="386" height="116" rx="8" fill="#fff2e7" stroke="#efc49e"/>
+  <text x="1330" y="346" text-anchor="middle" class="item-title">统一规划—控制接口</text>
+  <text x="1330" y="382" text-anchor="middle" class="item">SE(2) 轨迹与滚动 Waypoint</text>
+  <text x="1330" y="411" text-anchor="middle" class="item">统一执行反馈</text>
+
+  <rect x="1137" y="443" width="386" height="133" rx="8" fill="#fff2e7" stroke="#efc49e"/>
+  <text x="1330" y="482" text-anchor="middle" class="item-title">平台专属执行器</text>
+  <text x="1330" y="520" text-anchor="middle" class="item">轮式 MPC / MPPI</text>
+  <text x="1330" y="550" text-anchor="middle" class="item">四足 Locomotion Policy</text>
+
+  <rect x="1137" y="595" width="386" height="165" rx="8" fill="#fff2e7" stroke="#efc49e"/>
+  <text x="1330" y="635" text-anchor="middle" class="item-title">安全执行与局部验证</text>
+  <text x="1330" y="674" text-anchor="middle" class="item">Recovery · 安全停止</text>
+  <text x="1330" y="706" text-anchor="middle" class="item">运动学与动力学仿真</text>
+  <text x="1330" y="738" text-anchor="middle" class="item">控制器在环 · 接口小实验</text>
+
+  <!-- Horizontal relations -->
+  <line x1="495" y1="468" x2="570" y2="468" stroke="#8ca1b3" stroke-width="8" marker-end="url(#arrow)"/>
+  <text x="533" y="440" text-anchor="middle" class="arrow-label">共享基座</text>
+  <line x1="1025" y1="468" x2="1100" y2="468" stroke="#8ca1b3" stroke-width="8" marker-end="url(#arrow)"/>
+  <text x="1063" y="440" text-anchor="middle" class="arrow-label">轨迹条件</text>
+
+  <!-- Down arrows -->
+  <line x1="270" y1="793" x2="270" y2="833" stroke="#8ca1b3" stroke-width="7" marker-end="url(#arrow)"/>
+  <line x1="800" y1="793" x2="800" y2="833" stroke="#8ca1b3" stroke-width="7" marker-end="url(#arrow)"/>
+  <line x1="1330" y1="793" x2="1330" y2="833" stroke="#8ca1b3" stroke-width="7" marker-end="url(#arrow)"/>
+
+  <!-- Bottom integration -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="850" width="1490" height="112" rx="12" fill="url(#bottom)"/>
+  </g>
+  <text x="800" y="892" text-anchor="middle" class="bottom-title">第四章：真实车辆—四足机器人系统集成与全方位实车实验</text>
+  <rect x="82" y="912" width="250" height="34" rx="17" fill="#ffffff" opacity=".9"/>
+  <text x="207" y="936" text-anchor="middle" class="chip">严格反事实数据</text>
+  <rect x="352" y="912" width="220" height="34" rx="17" fill="#ffffff" opacity=".9"/>
+  <text x="462" y="936" text-anchor="middle" class="chip">Real Car / Real Dog</text>
+  <rect x="592" y="912" width="245" height="34" rx="17" fill="#ffffff" opacity=".9"/>
+  <text x="714" y="936" text-anchor="middle" class="chip">Zero-shot / Few-shot</text>
+  <rect x="857" y="912" width="225" height="34" rx="17" fill="#ffffff" opacity=".9"/>
+  <text x="969" y="936" text-anchor="middle" class="chip">Online Adaptation</text>
+  <rect x="1102" y="912" width="185" height="34" rx="17" fill="#ffffff" opacity=".9"/>
+  <text x="1194" y="936" text-anchor="middle" class="chip">同任务对照</text>
+  <rect x="1307" y="912" width="215" height="34" rx="17" fill="#ffffff" opacity=".9"/>
+  <text x="1414" y="936" text-anchor="middle" class="chip">安全与统计验证</text>
+</svg>

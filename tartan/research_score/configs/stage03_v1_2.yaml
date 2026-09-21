@@ -1,0 +1,36 @@
+protocol_version: score-decomp-transfer-v1.2
+protocol:
+  condition_mode: route_set
+  max_candidates: 6
+  num_points: 80
+  length_selection_stage: "03"
+  length_candidates_m: [8, 10, 12, 15, 20]
+  minimum_train_coverage: 0.90
+trajectory:
+  representation: xy_cos_sin
+  length_mode: fixed_arc_length
+  length_candidates_m: [8, 10, 12, 15, 20]
+  min_train_coverage: 0.90
+  length_selection: largest_candidate_meeting_coverage
+  length_m: derived_from_train_audit
+  num_points: 80
+  resampling: normalized_arc_length
+  preserve_timestamps: true
+route:
+  condition_mode: route_set
+  source: map_goal
+  max_candidates: 6
+  deduplication: topology_and_overlap
+  dedup_overlap_threshold: 0.90
+splits: {seed: 20260911, unit: complete_trajectory, train: 0.70, val: 0.15, test: 0.15}
+budgets: {percent: [1, 10, 100], joint_seeds: [11, 22, 33, 44, 55], unit: complete_episode, nested: true}
+pairing: {proxy_a: diff, proxy_b: anymal, pair_level: proxy, max_start_m: 20.0, max_goal_m: 25.0}
+claims: {car_dog_scientific: false}
+paths:
+  project_root: ${PROJECT_ROOT}
+  tartan_root: ${TARTAN_ROOT}
+  nuplan_root: ${NUPLAN_ROOT}
+  source_args: ${SOURCE_ARGS}
+  source_checkpoint: ${SOURCE_CKPT}
+  output_root: ${OUTPUT_ROOT}
+  cf_pair_root: ${CF_PAIR_ROOT}

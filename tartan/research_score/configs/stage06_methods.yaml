@@ -1,0 +1,17 @@
+protocol: score-decomp-transfer-v1.2.3
+target_budget_percent: 1
+repeat_id: 44
+trajectory: {length_m: 8, points: 80}
+methods:
+  pretrain_finetune: {profile: transfer_primary, initialization: nuplan, source_data: false}
+  pretrain_adapter: {profile: transfer_primary, initialization: nuplan, source_data: false}
+  joint_train: {profile: transfer_primary, initialization: nuplan, source_data: true}
+  emb_cond_diffusion: {profile: transfer_primary, initialization: nuplan, source_data: true}
+  additive_diff_only: {profile: proxy_pair_auxiliary, execution: synthetic_interface_only}
+  ours_score_decomp: {profile: strict_pair, execution: blocked_until_strict_pairs}
+fairness:
+  same_target_manifest: true
+  same_target_budget: true
+  same_output_points: true
+  same_goal_benchmark: true
+  future_gt_as_input: false

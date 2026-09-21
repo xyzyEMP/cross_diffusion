@@ -1,0 +1,20 @@
+protocol_version: score-decomp-transfer-v1.2
+protocol:
+  condition_mode: route_set
+  max_candidates: 6
+  num_points: 80
+  length_selection_stage: "03"
+  length_candidates_m: [8, 10, 12, 15, 20]
+  minimum_train_coverage: 0.90
+  source_regression_horizon_s: 8
+  source_sample_rate_hz: 10
+claims:
+  car_dog_scientific: false
+paths:
+  project_root: ${PROJECT_ROOT}
+  tartan_root: ${TARTAN_ROOT}
+  nuplan_root: ${NUPLAN_ROOT}
+  source_args: ${SOURCE_ARGS}
+  source_checkpoint: ${SOURCE_CKPT}
+  output_root: ${OUTPUT_ROOT}
+  cf_pair_root: ${CF_PAIR_ROOT}
