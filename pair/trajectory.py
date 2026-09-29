@@ -61,8 +61,11 @@ def load_trajectory(path: Union[str, Path], embodiment: str) -> Trajectory:
     if not sequence_dir.is_dir():
         raise ValueError(f"Expected a trajectory directory, got {sequence_dir}")
 
-    embodiment = embodiment.removeprefix("Data_")
-    directory_embodiment = sequence_dir.parent.name.removeprefix("Data_")
+    embodiment = embodiment[5:] if embodiment.startswith("Data_") else embodiment
+    directory_name = sequence_dir.parent.name
+    directory_embodiment = (
+        directory_name[5:] if directory_name.startswith("Data_") else directory_name
+    )
     if embodiment != directory_embodiment:
         raise ValueError(
             f"Embodiment {embodiment!r} does not match {sequence_dir.parent.name!r}"

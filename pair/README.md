@@ -46,10 +46,10 @@ x y z qx qy qz qw
 
 ```yaml
 segment_length: 10.0
-segment_stride: 5.0
+segment_stride: 2.5
 ```
 
-因此每个 segment 表示 10 m 实际运动距离，窗口每 5 m 滑动一次。窗口入口、出口和中心在累计弧长上做线性插值；不足 10 m 的尾段不保留。
+因此每个 segment 表示 10 m 实际运动距离，窗口每 2.5 m 滑动一次。窗口入口、出口和中心在累计弧长上做线性插值；不足 10 m 的尾段不保留。
 
 每个 `LocalSegment` 保存来源 trajectory、原始 frame 范围、XYZ 点、入口、出口、中心和三维路径长度。
 
@@ -88,7 +88,7 @@ XY exit distance < exit_threshold
 
 ```yaml
 segment_length: 10.0
-segment_stride: 5.0
+segment_stride: 2.5
 region_search_radius: 3.0
 entry_threshold: 1.0
 exit_threshold: 1.0
@@ -101,6 +101,30 @@ random_seed: 0
 ```
 
 这些值是首轮人工检查参数，不应视为最终数据定义。
+
+## 为什么将 stride 从 5 m 改为 2.5 m
+
+首轮使用 10 m segment、5 m stride 和 1 m entry/exit 阈值时，三组相似路线候选数为 9、41、70。`anymal-diff` 明显偏少。
+
+只读漏斗分析表明，问题不在路线相似度，而在窗口入口和出口没有对齐：
+
+| stride=5 m 过滤阶段 | anymal-diff | anymal-omni | diff-omni |
+|---|---:|---:|---:|
+| segments | 488 / 857 | 488 / 1496 | 857 / 1496 |
+| center distance ≤ 3 m | 379 | 577 | 944 |
+| entry、exit 均 < 1 m | 9 | 44 | 70 |
+| 路线相似条件通过 | 9 | 41 | 70 |
+
+Anymal、Diff、Omni 的累计轨迹长度分别约为 2621.8 m、4323.3 m 和 7519.9 m，因此 Anymal 原本产生的局部窗口就更少。更关键的是，`anymal-diff` 的 379 个同区域窗口中只有 9 个同时满足 1 m entry/exit 条件，而这 9 个全部通过路线相似条件。
+
+5 m stride 相对 1 m endpoint 阈值过粗，容易让实际经过同一路段的两条轨迹因窗口起点相差数米而无法配对。保持 segment 长度、区域半径、entry/exit 和路线阈值全部不变，仅将 stride 改为 2.5 m 后，实测结果为：
+
+| stride | anymal-diff | anymal-omni | diff-omni |
+|---|---:|---:|---:|
+| 5.0 m | 9 | 41 | 70 |
+| 2.5 m | 46 | 118 | 184 |
+
+该修改不放宽“同地、同进、同出、同路线”的定义，只提高空间滑窗采样密度。代价是相邻窗口的重叠率从 50% 增加到 75%，因此候选间相关性更高，统计分析时不应把所有重叠窗口视为完全独立样本。
 
 ## 输出
 
@@ -148,13 +172,18 @@ diff omni
 
 ## 当前全量结果
 
-输入包含 24 条 anymal、5 条 diff 和 6 条 omni trajectory。当前 `similar` 配置的结果位于：
+输入包含 24 条 anymal、5 条 diff 和 6 条 omni trajectory。旧版 5 m stride 与当前 2.5 m stride 分开保存：
 
 ```text
 /tj-share/tartanground/cross_diffusion_workdir/pair/
-├── anymal-diff/   # 9 candidates, 9 PNGs
-├── anymal-omni/   # 41 candidates, 41 PNGs
-└── diff-omni/     # 70 candidates, 50 sampled PNGs
+├── stride_5m/
+│   ├── anymal-diff/   # 9 candidates, 9 PNGs
+│   ├── anymal-omni/   # 41 candidates, 41 PNGs
+│   └── diff-omni/     # 70 candidates, 50 sampled PNGs
+└── stride_2_5m/
+    ├── anymal-diff/   # 46 candidates, 46 PNGs
+    ├── anymal-omni/   # 118 candidates, 50 sampled PNGs
+    └── diff-omni/     # 184 candidates, 50 sampled PNGs
 ```
 
 每个 candidate 是来自两条完整 trajectory 的两个局部 segment，不是整条 trajectory 的直接比较。

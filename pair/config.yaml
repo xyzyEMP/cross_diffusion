@@ -1,5 +1,5 @@
 segment_length: 10.0
-segment_stride: 5.0
+segment_stride: 2.5
 region_search_radius: 3.0
 entry_threshold: 1.0
 exit_threshold: 1.0
