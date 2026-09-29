@@ -1,52 +1,79 @@
-## Getting Started
+# Cross-Diffusion
 
-- Setup the nuPlan dataset following the [official documentation](https://nuplan-devkit.readthedocs.io/en/latest/dataset_setup.html).
-- Setup conda environment.
+Cross-Diffusion studies transfer of a nuPlan-pretrained diffusion trajectory planner to TartanGround embodied navigation. The current target is body-level local planning: an 8 m, 80-point SE(2) path, not joint- or motor-level control.
+
+## Current scope
+
+This repository contains:
+
+- the Diffusion Planner backbone and TartanGround preprocessing/evaluation;
+- episode-disjoint train/validation/test splits and exact nested data budgets;
+- navigation-metric checkpoint selection with early stopping;
+- full fine-tuning, frozen-adapter, joint-training, and embodiment-conditioned baselines;
+- shared/embodiment score decomposition with per-denoising-step residual correction;
+- proxy interfaces for diffusion, invariance, swap, separation, and gradient reversal;
+- real local-trajectory pair mining for ANYmal, Diff, and Omni;
+- engineering smoke runners for paired losses and four-way target-platform sampling.
+
+The decomposition/swap path is still an engineering prototype. Formal causal disentanglement, a trained adversarial separation classifier, non-trivial dual-context swap, and materialization of the new recorded matched pairs are not complete. See [PROJECT_STATUS.md](PROJECT_STATUS.md).
+
+## Data protocol
+
+| Split | Episodes | Use |
+|---|---:|---|
+| Train | 16 | 2,048 dense windows |
+| Validation | 3 | loss monitoring and 35 frozen navigation tasks |
+| Test | 5 | 63 frozen non-overlapping 8 m tasks |
+
+Exact nested training budgets are 20/205/410/1024/2048 windows for 1/10/20/50/100%. Every budget covers all 16 training episodes; validation and test remain unseen.
+
+## Model flow
+
+```text
+pose + observable map + fixed goal
+  -> ego / lanes / route_lanes
+  -> Diffusion Planner shared score
+  -> optional embodiment residual at each denoising step
+  -> 80-point local SE(2) path
+  -> receding-horizon rollout
+  -> SR / CR / SPL / goal progress
+```
+
+Key code:
+
+- `tartan/research_score/model/score_decomposition.py`
+- `tartan/research_score/training/losses.py`
+- `tartan/research_score/scripts/train_finetune_navigation_earlystop.py`
+- `tartan/research_score/scripts/evaluate_nonoverlap_segments.py`
+- `tartan/research_score/scripts/run_proxy_smoke.py`
+- `tartan/research_score/scripts/run_proxy_swap.py`
+- `pair/run_pair_mining.py`
+
+## Installation
+
+Set up nuPlan following its official documentation, then:
 
 ```bash
 conda create -n diffusion_planner python=3.9
 conda activate diffusion_planner
 
-# install nuplan-devkit
-git clone https://github.com/motional/nuplan-devkit.git && cd nuplan-devkit
+git clone https://github.com/motional/nuplan-devkit.git
+cd nuplan-devkit
 pip install -e .
 pip install -r requirements.txt
 
-# setup cross_diffusion
 cd ..
-git clone https://github.com/xyzyEMP/cross_diffusion.git && cd cross_diffusion
+git clone https://github.com/xyzyEMP/cross_diffusion.git
+cd cross_diffusion
 pip install -e .
 pip install -r requirements_torch.txt
 ```
 
-## Current cross-embodiment comparison
-
-This repository studies transfer from the nuPlan Car diffusion planner to TartanGround ANYmal. The current comparison contains four methods:
-
-- `pretrain_finetune`: load the Car checkpoint and fine-tune all parameters on ANYmal;
-- `pretrain_adapter`: freeze the Car backbone and train only the embodiment adapter;
-- `joint_train`: alternate Car and ANYmal batches while updating one backbone;
-- `emb_cond_diffusion`: joint training with platform ID, ability vector, and a residual correction at every denoising step.
-
-The formal protocol uses full-episode train/validation/test split `16/3/5`. Training uses dense 8 m / 80-point windows; held-out closed-loop testing uses 63 non-overlapping 8 m tasks from the five test episodes.
-
-## Reproduction entry points
-
-Set the dataset, checkpoint, and output paths in your environment before launching:
+## Tests
 
 ```bash
-export PROJECT_ROOT=/path/to/cross_diffusion
-export PYTHON_BIN=python
-export SOURCE_ARGS=$PROJECT_ROOT/checkpoints/args.json
-export SOURCE_CKPT=/path/to/model.pth
-export OUTPUT_ROOT=/path/to/experiment_outputs
-cd "$PROJECT_ROOT"
-
-# Train the four-method, three-budget formal matrix.
-bash tartan/research_score/scripts/run_stage07_formal_seed11_v3.sh
-
-# Evaluate the selected checkpoints with non-overlapping test segments.
-bash tartan/research_score/scripts/run_stage07_nonoverlap_eval.sh
+python -m pytest -q tartan/research_score/tests
+python -m unittest discover -s pair -p 'test_*.py' -v
 ```
 
-Large checkpoints, datasets, feature caches, and experiment outputs are intentionally excluded from Git.
+Datasets, feature caches, checkpoints, experiment outputs, internal plans, and detailed handoff documents are intentionally excluded from Git.

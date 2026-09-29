@@ -31,6 +31,12 @@ class ScoreDecompositionPlanner(nn.Module):
         xt=inputs.get("sampled_trajectories");t=inputs.get("diffusion_time")
         es=ee=et=None
         if xt is not None and t is not None:
-            mean_coeff=torch.exp(-.5*t).view(-1,*([1]*(xt.ndim-1)));sigma=(1-mean_coeff.square()).sqrt().clamp_min(sigma_clamp)
+            sde=getattr(self.backbone,"sde",None)
+            if sde is None:
+                mean_coeff=torch.exp(-.5*t).view(-1,*([1]*(xt.ndim-1)))
+                sigma=(1-mean_coeff.square()).sqrt().clamp_min(sigma_clamp)
+            else:
+                mean_coeff,sigma=sde.marginal_prob(torch.ones_like(xt),t)
+                sigma=sigma.clamp_min(sigma_clamp)
             es=(xt-mean_coeff*shared)/sigma;ee=-mean_coeff*delta/sigma;et=(xt-mean_coeff*total)/sigma
         return enc,{**out,"score":total,"decomposition":DecompositionOutput(shared,delta,total,es,ee,et,enc.get("encoding"),z)}

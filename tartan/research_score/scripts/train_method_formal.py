@@ -52,7 +52,7 @@ def validate(model,c,loader,wrapped,amp):
  return float(np.mean(vals))
 
 def main():
- p=argparse.ArgumentParser();p.add_argument("--method",choices=sorted(METHODS),required=True);p.add_argument("--train-cache",required=True);p.add_argument("--val-cache",required=True);p.add_argument("--source-cache",required=True);p.add_argument("--args",required=True);p.add_argument("--checkpoint",required=True);p.add_argument("--output",required=True);p.add_argument("--budget",type=int,choices=[1,10,100],required=True);p.add_argument("--max-target-updates",type=int,default=10000);p.add_argument("--min-target-updates",type=int,default=5000);p.add_argument("--val-every-updates",type=int,default=250);p.add_argument("--patience-validations",type=int,default=10);p.add_argument("--batch-size",type=int,default=64);p.add_argument("--seed",type=int,required=True);p.add_argument("--amp",action="store_true");a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument("--method",choices=sorted(METHODS),required=True);p.add_argument("--train-cache",required=True);p.add_argument("--val-cache",required=True);p.add_argument("--source-cache",required=True);p.add_argument("--args",required=True);p.add_argument("--checkpoint",required=True);p.add_argument("--output",required=True);p.add_argument("--budget",type=int,choices=[1,10,20,50,100],required=True);p.add_argument("--max-target-updates",type=int,default=10000);p.add_argument("--min-target-updates",type=int,default=5000);p.add_argument("--val-every-updates",type=int,default=250);p.add_argument("--snapshot-every-updates",type=int,default=0);p.add_argument("--patience-validations",type=int,default=10);p.add_argument("--batch-size",type=int,default=64);p.add_argument("--seed",type=int,required=True);p.add_argument("--amp",action="store_true");a=p.parse_args()
  torch.manual_seed(a.seed);torch.cuda.manual_seed_all(a.seed);random.seed(a.seed);out=Path(a.output);out.mkdir(parents=True,exist_ok=False)
  c=Config(a.args,None);c.device="cuda";backbone=Diffusion_Planner(c)
  load_ckpt(backbone,a.checkpoint)
@@ -66,7 +66,8 @@ def main():
  dl=DataLoader(ds,batch_size=min(a.batch_size,len(ds)),shuffle=True,num_workers=0,drop_last=False);vl=DataLoader(vd,batch_size=a.batch_size,shuffle=False,num_workers=0)
  src=torch.load(a.source_cache,map_location='cpu',weights_only=False) if a.method in {"joint_train","emb_cond_diffusion"} else None
  sched=torch.optim.lr_scheduler.ReduceLROnPlateau(opt,mode='min',factor=.5,patience=2,min_lr=5e-6)
- best=float("inf");best_update=0;best_state=None;history=[];global_step=0;target_updates=0;source_updates=0;epoch=0;next_val=a.val_every_updates;stale=0;stop=False;t0=time.time();train_target=[];train_source=[]
+ best=float("inf");best_update=0;best_state=None;history=[];global_step=0;target_updates=0;source_updates=0;epoch=0;next_val=a.val_every_updates;next_snapshot=a.snapshot_every_updates if a.snapshot_every_updates>0 else None;stale=0;stop=False;t0=time.time();train_target=[];train_source=[]
+ if next_snapshot is not None:(out/"snapshots").mkdir(exist_ok=False)
  while target_updates<a.max_target_updates and not stop:
   epoch+=1;model.train()
   if a.method=="pretrain_adapter":model.backbone.eval()
@@ -75,6 +76,9 @@ def main():
    loss=loss_step(model,c,x,y,m,wrapped,1,a.amp);opt.zero_grad(set_to_none=True);scaler.scale(loss).backward();scaler.unscale_(opt);torch.nn.utils.clip_grad_norm_(params,5.0);scaler.step(opt);scaler.update();global_step+=1;target_updates+=1;train_target.append(float(loss))
    if src is not None:
     sx,sy,sm=source_batch(src,len(y));sl=loss_step(model,c,sx,sy,sm,wrapped,0,a.amp);opt.zero_grad(set_to_none=True);scaler.scale(sl).backward();scaler.unscale_(opt);torch.nn.utils.clip_grad_norm_(params,5.0);scaler.step(opt);scaler.update();global_step+=1;source_updates+=1;train_source.append(float(sl))
+   if next_snapshot is not None and (target_updates>=next_snapshot or target_updates>=a.max_target_updates):
+    publish({"model":model.state_dict(),"epoch":epoch,"global_step":global_step,"target_updates":target_updates,"method":a.method,"budget":a.budget,"seed":a.seed},out/"snapshots"/f"epoch_{epoch:03d}_update_{target_updates:06d}.pt")
+    next_snapshot+=a.snapshot_every_updates
    if target_updates>=next_val or target_updates>=a.max_target_updates:
     val=validate(model,c,vl,wrapped,a.amp)
     if a.method=="pretrain_adapter":model.backbone.eval()
@@ -86,7 +90,7 @@ def main():
     if target_updates>=a.min_target_updates and stale>=a.patience_validations:stop=True;break
  publish({"model":best_state,"target_updates":best_update,"method":a.method,"budget":a.budget,"seed":a.seed,"val_loss":best},out/"best.pt")
  publish({"model":model.state_dict(),"optimizer":opt.state_dict(),"scaler":scaler.state_dict(),"scheduler":sched.state_dict(),"epoch":epoch,"global_step":global_step},out/"last.pt")
- result={"status":"complete","protocol":"formal_fixed_target_updates_v3_eval_mode","method":a.method,"budget":a.budget,"seed":a.seed,"target_samples":len(ds),"validation_samples":len(vd),"source_cache_samples":len(src['trajectory']) if src is not None else 0,"source_manifest_pool_samples":int(src['manifest_pool_size']) if src is not None else 0,"batch_size":a.batch_size,"max_target_updates":a.max_target_updates,"completed_epochs":epoch,"best_target_update":best_update,"best_validation_loss":best,"target_updates":target_updates,"source_updates":source_updates,"trainable_parameters":sum(q.numel() for q in params),"seconds":time.time()-t0,"history":history}
+ result={"status":"complete","protocol":"formal_fixed_target_updates_v3_eval_mode","method":a.method,"budget":a.budget,"seed":a.seed,"target_samples":len(ds),"validation_samples":len(vd),"source_cache_samples":len(src['trajectory']) if src is not None else 0,"source_manifest_pool_samples":int(src['manifest_pool_size']) if src is not None else 0,"batch_size":a.batch_size,"max_target_updates":a.max_target_updates,"snapshot_every_updates":a.snapshot_every_updates,"completed_epochs":epoch,"best_target_update":best_update,"best_validation_loss":best,"target_updates":target_updates,"source_updates":source_updates,"trainable_parameters":sum(q.numel() for q in params),"seconds":time.time()-t0,"history":history}
  publish(result,out/"metrics.json",True)
 
 if __name__=="__main__":main()

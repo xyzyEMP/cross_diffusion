@@ -44,9 +44,9 @@ def controller_segment(pred,max_distance=1.0,step=.1):
  return np.column_stack([np.interp(s,arc,p[:,0]),np.interp(s,arc,p[:,1])])
 
 def load_model(method,checkpoint,args):
- c=Config(args,None);c.device='cuda';base=Diffusion_Planner(c);wrapped=method in {'pretrain_adapter','emb_cond_diffusion'};m=ScoreDecompositionPlanner(base).cuda() if wrapped else base.cuda();z=torch.load(checkpoint,map_location='cpu',weights_only=False);state=z.get('ema_state_dict',z.get('model',z));state={k.removeprefix('module.'):v for k,v in state.items()};m.load_state_dict(state,strict=True);m.eval();return c,m,wrapped
+ c=Config(args,None);c.device='cuda';base=Diffusion_Planner(c);wrapped=method in {'pretrain_adapter','emb_cond_diffusion'};m=ScoreDecompositionPlanner(base).cuda() if wrapped else base.cuda();z=torch.load(checkpoint,map_location='cpu',weights_only=False);m.load_state_dict(z['model'],strict=True);m.eval();return c,m,wrapped
 
-def rollout(record,c,model,wrapped,episode_index,max_replans=16,inference_seed=10000):
+def rollout(record,c,model,wrapped,episode_index,max_replans=16):
  sparse=np.load(record['route_set']['map_reference'],allow_pickle=False);goal=np.asarray(record['fixed_goal']['xy_local'],float);prepared=prepare_episode(record,'anymal');_,blocked,start,_,cells,shortest,_,invalid=prepared
  if cells is None:return finish(record,np.zeros((1,2)),goal,shortest,False,False,'route_failure',0,0.)
  if invalid:return finish(record,np.zeros((1,2)),goal,shortest,False,False,'invalid_map_episode',0,0.)
@@ -54,7 +54,7 @@ def rollout(record,c,model,wrapped,episode_index,max_replans=16,inference_seed=1
  for rep in range(max_replans):
   inp,q=route_inputs(c,sparse,goal,current,yaw)
   if not q['route_candidate_mask'].any():reason='route_failure';break
-  inp=c.observation_normalizer(inp);torch.manual_seed(inference_seed+episode_index*100+rep);torch.cuda.manual_seed(inference_seed+episode_index*100+rep);t=time.perf_counter()
+  inp=c.observation_normalizer(inp);torch.manual_seed(10000+episode_index*100+rep);torch.cuda.manual_seed(10000+episode_index*100+rep);t=time.perf_counter()
   with torch.no_grad():
    if wrapped:_,o=model(inp,torch.ones(1,dtype=torch.long,device='cuda'),ABILITY_ANYMAL.cuda())
    else:_,o=model(inp)
@@ -88,5 +88,5 @@ def publish_json(obj,path):
  finally:Path(tmp).unlink(missing_ok=True)
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--method',required=True);p.add_argument('--checkpoint',required=True);p.add_argument('--args',required=True);p.add_argument('--test-manifest',required=True);p.add_argument('--output',required=True);p.add_argument('--inference-seed',type=int,default=10000);a=p.parse_args();out=Path(a.output);out.mkdir(parents=True,exist_ok=False);c,m,w=load_model(a.method,a.checkpoint,a.args);records=load_segments(a.test_manifest);rows=[rollout(r,c,m,w,i,inference_seed=a.inference_seed) for i,r in enumerate(records)];pd.DataFrame(rows).to_csv(out/'per_segment.csv',index=False);valid=[r for r in rows if r['included_in_denominator']];summary=aggregate(valid);summary.update({'method':a.method,'segments_selected':len(rows),'episode_macro':episode_macro(valid),'mean_inference_s':float(np.mean([r['mean_inference_s'] for r in rows]))});publish_json(summary,out/'summary.json');print(json.dumps(summary))
+ p=argparse.ArgumentParser();p.add_argument('--method',required=True);p.add_argument('--checkpoint',required=True);p.add_argument('--args',required=True);p.add_argument('--test-manifest',required=True);p.add_argument('--output',required=True);a=p.parse_args();out=Path(a.output);out.mkdir(parents=True,exist_ok=False);c,m,w=load_model(a.method,a.checkpoint,a.args);records=load_segments(a.test_manifest);rows=[rollout(r,c,m,w,i) for i,r in enumerate(records)];pd.DataFrame(rows).to_csv(out/'per_segment.csv',index=False);valid=[r for r in rows if r['included_in_denominator']];summary=aggregate(valid);summary.update({'method':a.method,'segments_selected':len(rows),'episode_macro':episode_macro(valid),'mean_inference_s':float(np.mean([r['mean_inference_s'] for r in rows]))});publish_json(summary,out/'summary.json');print(json.dumps(summary))
 if __name__=='__main__':main()

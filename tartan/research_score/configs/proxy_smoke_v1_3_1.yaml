@@ -1,0 +1,33 @@
+protocol: D028-D029-v1.3.1-proxy
+seed: 11
+platform_registry:
+  car: 0
+  anymal: 1
+  diff: 2
+ability_policy: unknown_zero_with_zero_validity_mask
+real_unpaired:
+  allowed_losses: [L_diff]
+  train_per_platform: 32
+  validation_per_platform: 8
+synthetic_paired:
+  tasks: 34
+  pair_selection: mean_aligned_prefix_distance_gt_0.05m
+  cross_pair_deduplication: exact_trajectory_pair_array
+  loss_weights:
+    invariant: 0.2
+    swap: 0.5
+    separation: 0.1
+training:
+  initial_updates: 50
+  maximum_updates: 200
+  batch_per_platform: 2
+  learning_rate: 0.00001
+  weight_decay: 0.0001
+  clip_norm: 5.0
+experiment1_rerun:
+  budgets:
+    1: 20
+    10: 205
+    100: 2048
+  methods: [pretrain_finetune, pretrain_adapter, joint_train, emb_cond_diffusion]
+  status: GPU_PENDING

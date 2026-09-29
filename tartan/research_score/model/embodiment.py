@@ -7,3 +7,13 @@ class EmbodimentEncoder(nn.Module):
     def forward(self, embodiment_id, ability, ability_mask=None):
         if ability_mask is not None: ability=ability*ability_mask
         return self.id(embodiment_id)+self.net(ability)
+
+    def reinitialize_id(self, embodiment_id, seed):
+        """Deterministically initialize one new platform row, preserving all others."""
+        if embodiment_id < 0 or embodiment_id >= self.id.num_embeddings:
+            raise IndexError("embodiment_id outside embedding registry")
+        generator = torch.Generator(device="cpu")
+        generator.manual_seed(int(seed))
+        value = torch.randn(self.id.embedding_dim, generator=generator, dtype=self.id.weight.dtype)
+        with torch.no_grad():
+            self.id.weight[embodiment_id].copy_(value.to(self.id.weight.device))
