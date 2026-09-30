@@ -1,8 +1,8 @@
 # Cross-Diffusion 训练与测试协议
 
-本文档总结当前仓库中实际可执行的正式训练与测试设置。训练协议为
-`score-decomp-transfer-v1.2.3`，正式训练入口为 v3；当前闭环测试任务为
-v1.2.4。项目范围和完成状态分别见 [README.md](README.md) 与
+本文档定义当前正式训练与测试的目标协议。训练协议为
+`score-decomp-transfer-v1.2.3`，当前闭环测试任务为 v1.2.4；尚未与目标协议一致的
+脚本列在第 8 节。项目范围和完成状态分别见 [README.md](README.md) 与
 [PROJECT_STATUS.md](PROJECT_STATUS.md)。
 
 ## 1. 实验目标与边界
@@ -55,7 +55,7 @@ v1.2.4。项目范围和完成状态分别见 [README.md](README.md) 与
 | 划分 | Episode 数 | 用途 |
 |---|---:|---|
 | Train | 16 | 2,048 个 dense windows |
-| Validation | 3 | loss 监控与 35 个冻结导航任务 |
+| Validation | 3 | loss 监控与 35 个冻结导航任务；按 Episode-macro SR 选模 |
 | Test | 5 | 63 个冻结、非重叠 8 m 任务 |
 
 嵌套预算定义为：
@@ -112,9 +112,9 @@ L = sum(mask * ||prediction - normalized_target||^2) / sum(mask)
 | Batch size | 64 |
 | 最大 target updates | 10,000 |
 | 最小 target updates | 5,000 |
-| 验证间隔 | 每 250 个 target updates |
-| Early-stopping patience | 连续 10 次验证无改善 |
-| 改善阈值 | `1e-5` |
+| 导航验证间隔 | 每 250 个 target updates |
+| Early-stopping patience | 连续 10 次导航验证的 Episode-macro SR 无提升 |
+| 主选模指标 | Episode-macro SR，越高越好 |
 | Optimizer | AdamW |
 | Adapter-only learning rate | `2e-4` |
 | 其他方法 learning rate | `1e-4` |
@@ -129,21 +129,25 @@ L = sum(mask * ||prediction - normalized_target||^2) / sum(mask)
 
 ### 5.3 验证与 checkpoint
 
-`best.pt` 按最低 validation denoising loss 选择，不按闭环导航指标选择。
+使用冻结的 validation 导航任务评估 checkpoint，以 Episode-macro SR 最大者作为
+最佳模型。并列时依次比较更高的 Episode-macro SPL、更低的 Episode-macro CR、
+更高的 Episode-macro Goal Progress，最后选择更早的 checkpoint。
+
 训练同时输出：
 
-- `best.pt`：最低验证损失对应权重；
+- `navigation_best.pt`：验证集 Episode-macro SR 最优的权重；
 - `last.pt`：最终模型及优化器、scaler、scheduler 状态；
-- `metrics.json`：训练设置、更新次数、最佳验证损失和训练历史。
+- `metrics.json`：训练设置、更新次数、验证导航指标、验证损失和训练历史。
 
-实现见
-[`scripts/train_method_formal.py`](../tartan/research_score/scripts/train_method_formal.py)。
+导航验证与 early-stopping 的现有参考实现见
+[`scripts/train_finetune_navigation_earlystop.py`](../tartan/research_score/scripts/train_finetune_navigation_earlystop.py)，
+但其当前首要指标仍是 Episode-macro SPL，需按本协议调整为 Episode-macro SR。
 
 ## 6. 正式测试协议
 
 当前测试入口为
 [`run_stage07_v124_nonoverlap_eval.sh`](../tartan/research_score/scripts/run_stage07_v124_nonoverlap_eval.sh)。
-它加载正式训练目录中的 `best.pt`，对四种方法和 1%、10%、100% 三档预算进行
+它应加载正式训练目录中的 `navigation_best.pt`，对四种方法和 1%、10%、100% 三档预算进行
 评估，共 12 个组合。
 
 ### 6.1 测试任务
@@ -222,8 +226,10 @@ bash tartan/research_score/scripts/run_stage07_v124_nonoverlap_eval.sh
 4. `tartan/research_score/README.md` 仍指向旧的
    `run_stage07_nonoverlap_eval.sh`；当前 v1.2.4 测试入口是
    `run_stage07_v124_nonoverlap_eval.sh`。
-5. 现有 README/状态文档提到 navigation-metric checkpoint selection，但正式训练器
-   实际按 validation denoising loss 保存 `best.pt`。
+5. 目标协议要求以 validation Episode-macro SR 选择 checkpoint；
+   `train_method_formal.py` 仍按 validation denoising loss 保存 `best.pt`，而
+   `train_finetune_navigation_earlystop.py` 当前以 Episode-macro SPL 为首要指标，二者都需
+   调整后才能执行本协议。
 6. 仓库未提交正式 cache 的哈希和生成记录，也未提交可直接核验“63 个测试任务”的
    最终 manifest。
 7. 配置声明 branch-stratified split，但当前执行入口消费已生成的数据，不能仅凭仓库

@@ -46,6 +46,7 @@ Omni 5/1。正式实验前必须按实际目录重新核验。
 | 训练样本 | 非配对窗口 | 相同基础样本 + Diff–Omni train pairs |
 | 损失 | `L_diff` | `L_diff + λ_inv L_inv + λ_swap L_swap + λ_sep L_sep` |
 | Embodiment 输入 | 无 | ID + ability vector |
+| Checkpoint 指标 | Validation Episode-macro SR | 与 A 完全相同 |
 
 ### 2.1 实验 A：Diffusion Planner Baseline
 
@@ -53,8 +54,9 @@ Omni 5/1。正式实验前必须按实际目录重新核验。
 Omni-train 和 Diff-train 进行训练。模型不接收 embodiment ID，不使用配对数据或因果
 辅助损失。
 
-验证集为 Omni-val 与 Diff-val 的合并集。checkpoint 按合并验证集最低 masked
-denoising loss 选择，同时分别报告 Omni 和 Diff 验证损失。
+从 Omni-val 与 Diff-val 分别构建冻结、非重叠的导航验证任务，再合并计算
+Episode-macro SR。checkpoint 按合并验证集 Episode-macro SR 最大选择，同时分别报告
+Omni 和 Diff 的 Episode-macro SR、SPL、CR 与 Goal Progress。
 
 该实验衡量普通 Diffusion Planner 从 Omni+Diff 到 ANYmal 的跨 embodiment baseline。
 
@@ -106,12 +108,16 @@ intervention 或 counterfactual pair。
 - 相同 8 m / 80 点轨迹表示、坐标系、上下文特征和 normalizer；
 - 相同 nuPlan checkpoint 初始化；
 - 相同 batch size、优化器、学习率、更新次数和随机种子；
-- 相同验证规则和 checkpoint 选择标准；
+- 相同冻结导航验证任务和 checkpoint 选择标准；
 - 相同基础 denoising sample 顺序。
 
 默认沿用 [TRAINING_PROTOCOL.md](TRAINING_PROTOCOL.md)：batch size 64、AdamW、
-learning rate `1e-4`、最多 10,000 次 target updates、每 250 次验证、至少训练
-5,000 次，并在连续 10 次验证无改善后早停。
+learning rate `1e-4`、最多 10,000 次 target updates、每 250 次运行一次冻结导航验证、
+至少训练 5,000 次，并在连续 10 次验证的 Episode-macro SR 无提升后早停。
+
+最佳 checkpoint 首先最大化 Episode-macro SR；并列时依次比较更高的
+Episode-macro SPL、更低的 Episode-macro CR、更高的 Goal Progress，以及更早的
+checkpoint。Denoising loss 只作为诊断指标，不参与选模。
 
 实验 B 必须单独报告 pair 数量、辅助损失权重和额外计算量。
 
