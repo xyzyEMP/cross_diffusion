@@ -158,35 +158,11 @@ python -m pair.run_pair_mining \
   --data-root /tj-share/tartanground/ModularNeighborhood \
   --config pair/config.yaml \
   --output-dir OUTPUT_DIR \
-  --embodiment-a anymal \
-  --embodiment-b diff
+  --embodiment-a diff \
+  --embodiment-b omni
 ```
 
-三组配对分别使用：
-
-```text
-anymal diff
-anymal omni
-diff omni
-```
-
-## 当前全量结果
-
-输入包含 24 条 anymal、5 条 diff 和 6 条 omni trajectory。旧版 5 m stride 与当前 2.5 m stride 分开保存：
-
-```text
-/tj-share/tartanground/cross_diffusion_workdir/pair/
-├── stride_5m/
-│   ├── anymal-diff/   # 9 candidates, 9 PNGs
-│   ├── anymal-omni/   # 41 candidates, 41 PNGs
-│   └── diff-omni/     # 70 candidates, 50 sampled PNGs
-└── stride_2_5m/
-    ├── anymal-diff/   # 46 candidates, 46 PNGs
-    ├── anymal-omni/   # 118 candidates, 50 sampled PNGs
-    └── diff-omni/     # 184 candidates, 50 sampled PNGs
-```
-
-每个 candidate 是来自两条完整 trajectory 的两个局部 segment，不是整条 trajectory 的直接比较。
+当前入口仅挖掘 Diff–Omni。ANYmal 完整轨迹保留用于最终测试；不得用 ANYmal 配对调训练或选模。候选采用10m/64点匹配表示，训练仍须重建共同frame的8m/80点，并通过同split配对门禁。
 
 ## 文件说明
 
@@ -196,3 +172,36 @@ diff omni
 - `run_pair_mining.py`：命令行入口及 JSON/CSV/PNG 输出；
 - `config.yaml`：所有长度、距离、模式和可视化参数；
 - `test_trajectory.py`、`test_matching.py`：最小可运行验证。
+
+新挖掘的 --output-dir 指定父目录；入口自动创建 YYYYMMDDTHHMMSSZ_pair_mining 子目录，记录 config.yaml 与 run.json。已有候选保留原名及内容；未经同 split/共同 frame 门禁不能用作新 B 训练集。
+
+Proxy A/B reconstruction uses the frozen trajectory manifest, original candidate
+manifest and its exact 10m/2.5m/64-point configuration. It never mines new pairs:
+
+```bash
+python -m pair.run_pair_mining --mode reconstruct \
+  --trajectory-manifest /tj-share/cross_diffusion_workdir/data/$DATA_ID/trajectories.jsonl \
+  --candidate-manifest /tj-share/cross_diffusion_workdir/pairs/stride_2_5m/diff-omni/candidates.json \
+  --candidate-config /tj-share/cross_diffusion_workdir/pairs/stride_2_5m/config.yaml \
+  --config pair/config.yaml --output-root /tj-share/cross_diffusion_workdir/pairs --run-id "$DATA_ID"
+```
+
+Replay locates the old XYZ-arc segment's start observation, then the shared
+`proxy_window` implementation builds the real XY8m/80-point suffix and past20
+history. Missing body-heading or occupancy-frame evidence rejects that candidate
+and preserves the manifest gate evidence. Cross-split candidates are rejected
+before replay. Both goals remain their own observed-path endpoints; transforms
+come only from observed anchors. No ICP, synthetic fixture, changed split or
+threshold relaxation is supported. Exact duplicate window pairs are rejected;
+window manifests are deduplicated by full sample ID and remain separate from base.
+
+The run writes `train.jsonl`, `val.jsonl`, `rejected.jsonl`,
+`train_windows.jsonl`, `val_windows.jsonl`, and `gate_summary.json` atomically,
+reusing only identical existing files. Train=0 means `BLOCKED_NO_TRAIN_PAIRS`;
+val=0 only removes the auxiliary diagnostic. At most six deterministic plots
+show accepted train/val and nearby rejected pairs in the observed Diff frame.
+The legacy mining mode remains explicitly `--mode mine`.
+
+## 已批准Proxy候选补充
+
+当前DATA_ID `20261002T045353Z_proxy_cpu`采用legacy10m重建与native8m冻结base窗口搜索的去重并集：218train/20val。继续使用本模块`--mode reconstruct`，额外传`--base-window-dir /tj-share/cross_diffusion_workdir/data/20261002T045353Z_proxy_cpu`；同trajectory manifest、10帧锚点网格、8m/80点共同frame门禁及明确批准记录均必须满足。不放宽阈值、不移动split、不采用逐帧密集诊断作为正式候选。已存在且不同的冻结产物仍拒绝覆盖；本次批准的输入替换记录保留在run内pair_inputs_before_expansion。缓存复用与真实B恢复验收见pair_expansion_checks.json，完整CPU已完成。

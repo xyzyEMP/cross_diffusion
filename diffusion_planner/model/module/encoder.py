@@ -6,6 +6,27 @@ from timm.layers import DropPath
 from diffusion_planner.model.module.mixer import MixerBlock
 
 
+class ProxyHistoryEncoder(nn.Module):
+    """Past-only physical history, with fixed unit scaling and explicit masks."""
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(nn.Linear(138, 64), nn.SiLU(), nn.Linear(64, 16))
+
+    def forward(self, inputs):
+        history = inputs["ego_history"]
+        mask = inputs["history_mask"].bool()
+        dt_mask = inputs["history_dt_mask"].bool()
+        motion_mask = inputs["motion_mask"].bool()
+        scale = history.new_tensor([20., 20., 1., 1.])
+        history = torch.where(mask[..., None], history / scale, 0.)
+        dt = torch.where(dt_mask, inputs["history_dt"], 0.)
+        features = torch.cat([history.flatten(1), mask.to(history.dtype),
+                              dt, dt_mask.to(history.dtype)], dim=-1)
+        z = self.net(features)
+        motion = torch.where(motion_mask, inputs["motion_rms"], 0.)
+        return torch.cat([z, motion, motion_mask.to(z.dtype)], dim=-1)
+
+
 class Encoder(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -28,6 +49,25 @@ class Encoder(nn.Module):
 
         # position embedding encode x, y, cos, sin, type
         self.pos_emb = nn.Linear(7, config.hidden_dim)
+
+    def enable_proxy_history(self, seed=11):
+        """Call only after strict source load, or before strict full resume load."""
+        if hasattr(self, "proxy_history"):
+            raise RuntimeError("Proxy history already enabled; refusing initialization reset")
+        reference = self.pos_emb.weight
+        with torch.random.fork_rng(devices=[]):
+            torch.random.default_generator.manual_seed(seed)
+            history = ProxyHistoryEncoder()
+            projection = nn.Linear(22, self.hidden_dim)
+            nn.init.zeros_(projection.weight)
+            nn.init.zeros_(projection.bias)
+        self.proxy_history = history.to(device=reference.device, dtype=reference.dtype)
+        self.proxy_projection = projection.to(device=reference.device, dtype=reference.dtype)
+
+    def encode_proxy_history(self, inputs):
+        if not hasattr(self, "proxy_history"):
+            raise RuntimeError("Proxy history must be explicitly enabled after source loading")
+        return self.proxy_history(inputs)
 
     def forward(self, inputs):
 
@@ -62,6 +102,12 @@ class Encoder(nn.Module):
 
         encoder_outputs['encoding'] = self.fusion(encoding_input, encoding_mask.view(B, self.token_num))
 
+        if hasattr(self, "proxy_history"):
+            context = inputs.get("proxy_context")
+            if context is None:
+                context = self.encode_proxy_history(inputs)
+            encoder_outputs["encoding"] = encoder_outputs["encoding"] + self.proxy_projection(context)[:, None, :]
+            encoder_outputs["proxy_context"] = context
         return encoder_outputs
 
 

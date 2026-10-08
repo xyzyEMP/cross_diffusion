@@ -7,7 +7,9 @@ import shutil
 
 def config(tmp_path):
     ckpt = tmp_path / "m"; ckpt.write_bytes(b"x")
-    return {"paths": {"project_root": str(tmp_path), "tartan_root": str(tmp_path), "nuplan_root": str(tmp_path), "source_args": str(ckpt), "source_checkpoint": str(ckpt), "output_root": str(tmp_path), "cf_pair_root": ""}, "protocol": {"condition_mode": "route_set", "max_candidates": 6, "num_points": 80, "length_selection_stage": "03"}, "claims": {"car_dog_scientific": False}}
+    keys = ("project_root", "tartan_root", "source_args", "source_checkpoint", "output_root", "train_cache", "val_cache", "source_cache", "val_navigation_manifest", "test_navigation_manifest")
+    return {"paths": {key: str(tmp_path if key.endswith("root") else ckpt) for key in keys}, "trajectory": {"length_m": 8, "points": 80}, "fairness": {"future_gt_as_input": False}}
+
 
 
 def result_map(items): return {x.id: x for x in items}
@@ -19,18 +21,13 @@ def test_missing_path_fails(tmp_path):
 
 
 def test_bad_protocol_fails(tmp_path):
-    cfg = config(tmp_path); cfg["protocol"]["max_candidates"] = 7
+    cfg = config(tmp_path); cfg["trajectory"]["points"] = 79
     assert result_map(run_checks(cfg, "transfer_primary", tmp_path / "new"))["protocol.frozen_fields"].status == "FAIL"
 
 
-def test_proxy_claim_fails(tmp_path):
-    cfg = config(tmp_path); cfg["claims"]["car_dog_scientific"] = True
-    assert result_map(run_checks(cfg, "proxy_pair_auxiliary", tmp_path / "new"))["claims.proxy_scope"].status == "FAIL"
-
-
-def test_strict_without_pairs_fails(tmp_path):
+def test_unimplemented_profile_fails(tmp_path):
     cfg = config(tmp_path)
-    assert result_map(run_checks(cfg, "strict_pair", tmp_path / "new"))["strict_pair.data"].status == "FAIL"
+    assert result_map(run_checks(cfg, "proposed_b", tmp_path / "new"))["profile"].status == "FAIL"
 
 
 def test_existing_output_fails(tmp_path):
@@ -38,9 +35,9 @@ def test_existing_output_fails(tmp_path):
     assert result_map(run_checks(cfg, "transfer_primary", report))["output.no_overwrite"].status == "FAIL"
 
 
-def test_length_cannot_be_handfilled(tmp_path):
-    cfg = config(tmp_path); cfg["protocol"]["length_m"] = 12
-    assert result_map(run_checks(cfg, "transfer_primary", tmp_path / "new"))["protocol.length_pending_stage03"].status == "FAIL"
+def test_future_input_rejected(tmp_path):
+    cfg = config(tmp_path); cfg["fairness"]["future_gt_as_input"] = True
+    assert result_map(run_checks(cfg, "transfer_primary", tmp_path / "new"))["protocol.no_future_input"].status == "FAIL"
 
 
 def test_sentinel_disk_capacity_is_unknown_warn(tmp_path):

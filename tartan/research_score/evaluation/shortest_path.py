@@ -29,8 +29,8 @@ def astar(blocked,start,goal,resolution_m=0.5):
                 g[v]=z;came[v]=u;h=np.hypot(v[0]-goal[0],v[1]-goal[1]);heapq.heappush(q,(z+h,v))
     return None,float("inf")
 
-def sparse_grid(sparse):
-    x=np.asarray(sparse);n=int(max(250,x[:,:2].max()+1));blocked=np.zeros((n,n),bool)
+def sparse_grid(sparse,grid_size=None):
+    x=np.asarray(sparse);n=grid_size or int(max(250,x[:,:2].max()+1));blocked=np.zeros((n,n),bool)
     q=x[np.isin(x[:,3],[3,5]),:2];blocked[q[:,0],q[:,1]]=True
     return blocked
 

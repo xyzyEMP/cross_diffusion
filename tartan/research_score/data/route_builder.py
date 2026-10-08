@@ -1,4 +1,4 @@
-from .core import RouteSetBuilder, RouteSpec, overlap_ratio
+from .core import RouteSpec, overlap_ratio, resample_polyline
 import heapq
 import numpy as np
 
@@ -11,9 +11,9 @@ class OccupancyRouteSetBuilder:
     The fixed goal is supplied independently of the future path.
     """
     dependency_fields=("current_sparse_occupancy","fixed_goal_xy_local","resolution_m","route_spec")
-    def __init__(self,spec=RouteSpec(),resolution_m=.5):self.spec,self.resolution_m=spec,resolution_m
+    def __init__(self,spec=RouteSpec(),resolution_m=.5,grid_size=None):self.spec,self.resolution_m,self.grid_size=spec,resolution_m,grid_size
     def build(self,sparse,fixed_goal_xy_local):
-        x=np.asarray(sparse); n=int(max(250,x[:,:2].max()+1)); blocked=np.zeros((n,n),bool); flat=np.zeros((n,n),bool)
+        x=np.asarray(sparse); n=self.grid_size or int(max(250,x[:,:2].max()+1)); blocked=np.zeros((n,n),bool); flat=np.zeros((n,n),bool)
         blocked[x[np.isin(x[:,3],[3,5]),0],x[np.isin(x[:,3],[3,5]),1]]=True
         flat[x[x[:,3]==1,0],x[x[:,3]==1,1]]=True
         nominal_start=(n//2,n//2); delta=np.rint(np.asarray(fixed_goal_xy_local)/self.resolution_m).astype(int)
@@ -28,7 +28,7 @@ class OccupancyRouteSetBuilder:
             grid=self._astar(cost,start,goal)
             if not grid:break
             local=(np.asarray(grid,float)-np.asarray(start))*self.resolution_m
-            dense=RouteSetBuilder(self.spec)._resample(local)
+            dense=resample_polyline(local, self.spec.points_per_candidate)
             if all(overlap_ratio(dense,q)<self.spec.dedup_overlap_threshold or overlap_ratio(q,dense)<self.spec.dedup_overlap_threshold for q in paths):paths.append(dense)
             for i,j in grid:cost[max(0,i-2):i+3,max(0,j-2):j+3]+=2.0
         arr=np.zeros((self.spec.max_candidates,self.spec.points_per_candidate,2),np.float32);mask=np.zeros(self.spec.max_candidates,bool)
@@ -67,4 +67,4 @@ class OccupancyRouteSetBuilder:
                     g[v]=z;came[v]=u;h=abs(v[0]-goal[0])+abs(v[1]-goal[1]);heapq.heappush(q,(z+h,v))
         return []
 
-__all__=["RouteSetBuilder","RouteSpec","overlap_ratio","OccupancyRouteSetBuilder"]
+__all__=["RouteSpec","overlap_ratio","OccupancyRouteSetBuilder"]

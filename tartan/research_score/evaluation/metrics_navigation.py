@@ -17,3 +17,10 @@ def aggregate(rows):
     if not n:return {"episodes":0,"sr":0.,"cr":0.,"spl":0.,"stuck_rate":0.,"route_failure_rate":0.,"goal_progress":0.}
     mean=lambda k:float(np.mean([r[k] for r in rows]))
     return {"episodes":n,"sr":mean("success"),"cr":mean("collision"),"spl":mean("spl"),"stuck_rate":mean("stuck"),"route_failure_rate":mean("route_failure"),"goal_progress":mean("goal_progress")}
+
+
+def checkpoint_selection_key(row):
+    """SR first; ties use SPL, lower CR, progress, then earlier update."""
+    metrics = row["navigation"]
+    return (float(metrics["sr"]), float(metrics["spl"]), -float(metrics["cr"]),
+            float(metrics["goal_progress"]), -int(row["target_updates"]))

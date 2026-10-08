@@ -224,3 +224,28 @@ def mine_candidate_pairs(
                 )
             )
     return sorted(candidates, key=lambda pair: pair.pair_id)
+
+
+def proxy_pair_metrics(path_a, path_b):
+    """Metrics of two rebuilt 80-point trajectories in the Diff anchor frame."""
+    a, b = np.asarray(path_a, float), np.asarray(path_b, float)
+    if a.shape != (80, 4) or b.shape != (80, 4) or not np.isfinite([a, b]).all():
+        raise ValueError("Pair trajectories must be finite [80,4]")
+    d = np.linalg.norm(a[:, :2] - b[:, :2], axis=1)
+    pairwise = np.linalg.norm(a[:, None, :2] - b[None, :, :2], axis=-1)
+    return {
+        "center_distance": float(np.linalg.norm((a[39, :2]+a[40, :2]-b[39, :2]-b[40, :2])/2)),
+        "entry_distance": float(d[0]), "exit_distance": float(d[-1]),
+        "mean_path_distance": float(d.mean()), "max_path_distance": float(d.max()),
+        "chamfer_distance": float((pairwise.min(0).mean()+pairwise.min(1).mean())/2),
+        "spatial_overlap": float(((pairwise.min(0)<=3).mean()+(pairwise.min(1)<=3).mean())/2),
+        "heading_difference_mean_rad": float(np.abs(np.arctan2(a[:, 3]*b[:, 2]-a[:, 2]*b[:, 3], (a[:, 2:]*b[:, 2:]).sum(-1))).mean()),
+    }
+
+
+def proxy_gate_reasons(metrics):
+    limits = {"center_distance": (3., False), "entry_distance": (1., True),
+              "exit_distance": (1., True), "mean_path_distance": (1., True),
+              "max_path_distance": (2., True)}
+    return [key for key, (limit, strict) in limits.items()
+            if not np.isfinite(metrics[key]) or (metrics[key] >= limit if strict else metrics[key] > limit)]

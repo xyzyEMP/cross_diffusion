@@ -9,3 +9,25 @@ max_path_distance_threshold: 2.0
 path_relation: similar
 visualization_count: 50
 random_seed: 0
+proxy_gate:
+  candidate_policy: legacy10m_plus_native8m
+  native_anchor_stride_frames: 10
+  supplement_approval_record: /tj-share/cross_diffusion_workdir/runs/20261002T045353Z_proxy_cpu/pair_expansion_approval.json
+  length_m: 8.0
+  num_points: 80
+  arc_metric: xy
+  center_distance_max_m: 3.0
+  entry_distance_lt_m: 1.0
+  exit_distance_lt_m: 1.0
+  mean_distance_lt_m: 1.0
+  max_distance_lt_m: 2.0
+  common_frame: diff_observed_anchor
+  full_valid_required: true
+  same_split_required: true
+  history_steps: 20
+  pair_level: observational_matched
+  intervention: false
+  counterfactual: false
+  allow_icp: false
+  allow_threshold_relaxation: false
+  visualization_count: 6

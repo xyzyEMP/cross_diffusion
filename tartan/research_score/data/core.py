@@ -60,40 +60,10 @@ def resample_fixed_arc(se2: np.ndarray, length_m: float, count: int = 80) -> Tup
     return out, valid.astype(bool)
 
 
-def select_length(train_lengths: Mapping[str, Sequence[float]], candidates=LENGTH_CANDIDATES_M, threshold=0.90) -> Dict[str, object]:
-    if not train_lengths or any(len(v) == 0 for v in train_lengths.values()):
-        raise RuntimeError("each active training branch must have non-empty train lengths")
-    coverage = {str(int(c) if float(c).is_integer() else c): {k: float(np.mean(np.asarray(v) + 1e-9 >= c)) for k, v in train_lengths.items()} for c in candidates}
-    eligible = [float(c) for c in candidates if all(coverage[str(int(c) if float(c).is_integer() else c)][k] >= threshold for k in train_lengths)]
-    if not eligible:
-        raise RuntimeError("BLOCKED: no fixed arc length meets min_train_coverage for every active branch")
-    selected = max(eligible)
-    payload = {"selection_source": "train_manifest_only", "candidates_m": list(map(float, candidates)), "min_train_coverage": threshold, "coverage": coverage, "selected_length_m": selected, "branches": sorted(train_lengths)}
-    payload["train_statistics_sha256"] = sha256_json(payload)
-    return payload
 
 
-def group_split(ids: Sequence[str], seed: int = 20260911, train=0.70, val=0.15) -> Dict[str, str]:
-    unique = sorted(set(ids))
-    rng = np.random.default_rng(seed)
-    order = [unique[i] for i in rng.permutation(len(unique))]
-    n = len(order)
-    nt = max(1, int(math.floor(n * train))) if n else 0
-    nv = max(1, int(math.floor(n * val))) if n >= 3 else 0
-    if nt + nv >= n and n >= 3:
-        nt = n - nv - 1
-    return {x: ("train" if i < nt else "val" if i < nt + nv else "test") for i, x in enumerate(order)}
 
 
-def nested_budgets(train_episode_ids: Sequence[str], seed: int) -> Dict[str, List[str]]:
-    ids = sorted(set(train_episode_ids))
-    rng = np.random.default_rng(seed)
-    order = [ids[i] for i in rng.permutation(len(ids))]
-    def take(frac: float) -> List[str]:
-        if not order:
-            return []
-        return sorted(order[:max(1, int(math.ceil(len(order) * frac)))])
-    return {"1": take(.01), "10": take(.10), "100": sorted(order)}
 
 
 def cache_key(sample_id: str, preprocess_version: str, route_spec_hash: str, checkpoint_hash: str, schema_version: str = SCHEMA_VERSION) -> str:
@@ -107,39 +77,14 @@ def overlap_ratio(a: np.ndarray, b: np.ndarray, tolerance=0.5) -> float:
     return float((d.min(axis=1) <= tolerance).mean())
 
 
-class RouteSetBuilder:
-    """Map/goal-only builder. The API intentionally has no future trajectory argument."""
-    dependency_fields = ("current_xy", "goal_xy", "map_polylines", "route_spec")
-
-    def __init__(self, spec: RouteSpec): self.spec = spec
-
-    def build(self, current_xy: Sequence[float], goal_xy: Sequence[float], map_polylines: Sequence[np.ndarray]) -> Dict[str, np.ndarray]:
-        start, goal = np.asarray(current_xy, dtype=float), np.asarray(goal_xy, dtype=float)
-        proposals: List[np.ndarray] = []
-        direct = np.linspace(start, goal, self.spec.points_per_candidate)
-        proposals.append(direct)
-        for line in map_polylines:
-            line = np.asarray(line, dtype=float)
-            if line.ndim != 2 or line.shape[1] != 2 or len(line) < 2: continue
-            oriented = line if np.linalg.norm(line[0]-start) <= np.linalg.norm(line[-1]-start) else line[::-1]
-            raw = np.vstack([start, oriented, goal])
-            proposals.append(self._resample(raw))
-        kept: List[np.ndarray] = []
-        for p in proposals:
-            p = self._resample(p)
-            if all(overlap_ratio(p, q) < self.spec.dedup_overlap_threshold or overlap_ratio(q, p) < self.spec.dedup_overlap_threshold for q in kept):
-                kept.append(p)
-            if len(kept) == self.spec.max_candidates: break
-        arr = np.zeros((self.spec.max_candidates, self.spec.points_per_candidate, 2), np.float32)
-        mask = np.zeros(self.spec.max_candidates, bool)
-        for i,p in enumerate(kept): arr[i], mask[i] = p, True
-        return {"route_candidates_xy": arr, "route_candidate_mask": mask, "route_source": "map_goal", "route_spec_hash": self.spec.hash}
-
-    def _resample(self, xy: np.ndarray) -> np.ndarray:
-        xy=np.asarray(xy,float); seg=np.linalg.norm(np.diff(xy,axis=0),axis=1); s=np.r_[0,np.cumsum(seg)]
-        if s[-1] < 1e-9: return np.repeat(xy[:1], self.spec.points_per_candidate, axis=0).astype(np.float32)
-        q=np.linspace(0,s[-1],self.spec.points_per_candidate)
-        return np.column_stack([np.interp(q,s,xy[:,i]) for i in range(2)]).astype(np.float32)
+def resample_polyline(xy, count):
+    xy = np.asarray(xy, float)
+    seg = np.linalg.norm(np.diff(xy, axis=0), axis=1)
+    arc = np.r_[0, np.cumsum(seg)]
+    if arc[-1] < 1e-9:
+        return np.repeat(xy[:1], count, axis=0).astype(np.float32)
+    query = np.linspace(0, arc[-1], count)
+    return np.column_stack([np.interp(query, arc, xy[:, i]) for i in range(2)]).astype(np.float32)
 
 
 def assert_no_split_leak(rows: Sequence[Mapping[str, object]], keys=("map_id", "trajectory_id", "pair_id")) -> None:
@@ -152,7 +97,73 @@ def assert_no_split_leak(rows: Sequence[Mapping[str, object]], keys=("map_id", "
             seen[str(v)] = str(split)
 
 
-def masked_mse(pred: np.ndarray, target: np.ndarray, mask: np.ndarray) -> float:
-    m=np.asarray(mask,bool)
-    if not m.any(): return 0.0
-    return float(np.mean((np.asarray(pred)[m]-np.asarray(target)[m])**2))
+def canonical_trajectory(se2, timestamps, length_m):
+    """Canonical values/mask with raw provenance; timestamps describe raw poses."""
+    values, mask = resample_fixed_arc(np.asarray(se2), length_m, 80)
+    return {"values": values, "valid_mask": mask, "raw_se2": np.asarray(se2),
+            "timestamps_s": np.asarray(timestamps)}
+
+
+PROXY_REPRESENTATION = 'anchor-inclusive-xy-8m-80-first-duplicate'
+
+
+def proxy_split(rows, seed=20260911):
+    import random
+    assigned = []
+    for platform in ('diff','omni','anymal'):
+        group = sorted((dict(r) for r in rows if r['embodiment']==platform), key=lambda r:r['trajectory_key'])
+        if platform != 'anymal' and len(group)<2: raise ValueError(f'{platform}: requires at least two trajectories')
+        order = list(range(len(group))); random.Random(seed).shuffle(order)
+        val = set(order[:max(1,round(.2*len(group)))]) if platform!='anymal' else set()
+        for i,r in enumerate(group):
+            r.update(split='test' if platform=='anymal' else ('val' if i in val else 'train'), split_seed=seed, split_algorithm='per-platform-sorted-python-random-shuffle')
+            assigned.append(r)
+    assert_no_split_leak(assigned, keys=('trajectory_key',))
+    return sorted(assigned,key=lambda r:r['trajectory_key'])
+
+
+def proxy_window(row, se2, anchor, manifest_path):
+    from tartan.data.pose_utils import to_local_se2, proxy_history, proxy_occupancy_geometry
+    gates=row.get('gates',{})
+    if not gates.get('reference_heading',gates.get('body_heading',False)) or not gates.get('occupancy_frame'):
+        raise ValueError('unverified_reference_or_occupancy_frame')
+    if anchor < 20: raise ValueError('insufficient_history')
+    suffix=se2[anchor:];cum=np.r_[0.,np.cumsum(np.linalg.norm(np.diff(suffix[:,:2],axis=0),axis=1))]
+    hits=np.flatnonzero(cum>=8.)
+    end=anchor+int(hits[0]) if len(hits) else len(se2)-1
+    local=to_local_se2(se2[anchor:end+1],se2[anchor])
+    # First pose at each arc station; repeated XY never creates spatial motion.
+    distance=np.r_[0.,np.cumsum(np.linalg.norm(np.diff(local[:,:2],axis=0),axis=1))]
+    _,indices=np.unique(distance,return_index=True)
+    unique=local[indices]
+    if len(unique)<2:
+        values=np.repeat(np.array([[0.,0.,1.,0.]],np.float32),80,axis=0);mask=np.zeros(80,bool);mask[0]=True
+    else: values,mask=resample_fixed_arc(unique,8.,80)
+    measured=min(float(cum[-1]),8.)
+    goal=np.asarray([np.interp(measured,distance,local[:,i]) for i in range(2)],np.float32)
+    occ=Path(row['occupancy_dir'])/f'occupancy_coarse5_{anchor:06d}_sparse.npy'
+    if not occ.is_file():raise FileNotFoundError(occ)
+    key=row['trajectory_key'];sid=f'{key}:anchor:{anchor:06d}'
+    return {'profile':'proxy_ab','sample_id':sid,'episode_id':key,'trajectory_key':key,'map_id':row['map_id'],
+      'trajectory_id':row['trajectory_id'],'domain':'tartanground','embodiment':row['embodiment'],'platform_id':row['platform_id'],
+      'robot_radius_m':row['robot_radius_m'],'split':row['split'],'anchor_index':anchor,'branch':'moving_planning' if mask.all() else 'stop_or_short',
+      'history_start_frame':anchor-20,'history_end_frame':anchor-1,'history_policy':'past20_anchor_exclusive',
+      'time_source':row['time_source'],'body_heading_source':row['body_heading_source'],'reference_pose_policy':row.get('reference_pose_policy'),'reference_heading_source':row.get('reference_heading_source'),'reference_approval_record':row.get('reference_approval_record'),'frame_convention':row['frame_convention'],
+      'history':proxy_history(se2,anchor,row['sample_rate_hz']),
+      'current_state':{'global_se2_index':anchor,'anchor_world_se2':se2[anchor].tolist(),'se2_local':[0.,0.,0.],'frame_convention':row['frame_convention']},
+      'fixed_goal':{'xy_local':goal.tolist(),'actual_distance_m':measured,'requested_distance_m':8.,'rule':'true_xy_arc_8m_clamped_then_frozen'},
+      'route_set':{'map_reference':str(occ),'future_gt_dependency':False,'source':'current_coarse_occupancy_plus_fixed_goal','max_candidates':6,'occupancy_geometry':proxy_occupancy_geometry(row,anchor)},
+      'trajectory':{'raw_reference':row['pose_path'],'source_start_frame':anchor,'source_end_frame':end,'raw_points':end-anchor+1,'fixed_arc_length_80':values.tolist(),'valid_mask':mask.tolist(),'arc_metric':'xy','length_m':8.,'stations_m':np.linspace(0,8,80).tolist(),'measured_arc_m':measured},
+      'provenance':{'trajectory_manifest':str(manifest_path),'representation_policy':PROXY_REPRESENTATION,'time_source':row['time_source'],'body_heading_source':row['body_heading_source'],'frame_evidence':row['frame_evidence']}}
+
+
+def torch_transform_trajectory(value, transform, delta=False):
+    """Physical XY/direction transform; displacements have no translation."""
+    import torch
+    t=torch.as_tensor(transform,dtype=value.dtype,device=value.device)
+    if t.ndim==2:t=t.unsqueeze(0)
+    r=t[:,:2,:2]
+    xy=torch.einsum('bij,bnj->bni',r,value[...,:2])
+    if not delta:xy=xy+t[:,:2,2].unsqueeze(1)
+    direction=torch.einsum('bij,bnj->bni',r,value[...,2:])
+    return torch.cat((xy,direction),dim=-1)

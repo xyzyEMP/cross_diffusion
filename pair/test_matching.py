@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from pair.matching import MiningConfig, compare_paths, mine_candidate_pairs
+from pair.matching import MiningConfig, compare_paths, mine_candidate_pairs, proxy_pair_metrics, proxy_gate_reasons
 from pair.trajectory import LocalSegment
 
 
@@ -46,6 +46,22 @@ class MatchingTest(unittest.TestCase):
                 "random_seed": 0,
             }
         )
+
+    def test_proxy_common_frame_and_thresholds(self):
+        from pair.run_pair_mining import _common_path, _pose_matrix
+        path = np.column_stack((np.linspace(0, 8, 80), np.zeros(80), np.ones(80), np.zeros(80)))
+        transform = np.linalg.inv(_pose_matrix([2, -3, .6])) @ _pose_matrix([-1, 5, -.2])
+        common = _common_path(path, transform)
+        recovered = _common_path(common, np.linalg.inv(transform))
+        np.testing.assert_allclose(recovered, path, atol=1e-4, rtol=0)
+        metrics = proxy_pair_metrics(path, path)
+        self.assertEqual(proxy_gate_reasons(metrics), [])
+        shifted = path.copy()
+        shifted[:, 1] = 1
+        metrics = proxy_pair_metrics(path, shifted)
+        self.assertIn("entry_distance", proxy_gate_reasons(metrics))
+        self.assertIn("mean_path_distance", proxy_gate_reasons(metrics))
+        self.assertNotIn("max_path_distance", proxy_gate_reasons(metrics))
 
     def test_compare_identical_paths(self):
         segment = _segment(

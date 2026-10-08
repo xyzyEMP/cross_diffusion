@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import uuid
@@ -12,9 +11,8 @@ import torch
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.config import Config
-from tartan.data.features import build_model_features, stack_features
 from tartan.research_score.data.schema import source_input_schema
-from tartan.research_score.preflight.registry import file_sha256
+from tartan.research_score.artifacts import validate_output_name
 
 
 def _write_json_atomic(path: Path, payload) -> None:
@@ -32,12 +30,14 @@ def main():
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--device", choices=("cpu", "cuda"), required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--source-cache", help="Real nuPlan feature cache required for CUDA forward")
     parser.add_argument("--seed", type=int, default=20260909)
     args = parser.parse_args()
     if args.device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA audit requested but CUDA is unavailable; CPU fallback is forbidden")
     out = Path(args.output)
-    out.mkdir(parents=True, exist_ok=True)
+    validate_output_name(out.name)
+    out.mkdir(parents=True, exist_ok=False)
     cfg = Config(args.args, guidance_fn=None)
     cfg.device = args.device
     model = Diffusion_Planner(cfg)
@@ -47,8 +47,6 @@ def main():
     incompatible = model.load_state_dict(state, strict=True)
     audit = {
         "checkpoint": str(Path(args.checkpoint).resolve()),
-        "checkpoint_sha256": file_sha256(Path(args.checkpoint)),
-        "args_sha256": file_sha256(Path(args.args)),
         "strict_load": True,
         "missing_keys": list(incompatible.missing_keys),
         "unexpected_keys": list(incompatible.unexpected_keys),
@@ -66,8 +64,6 @@ def main():
         "source_horizon_seconds": cfg.future_len / 10,
         "output_semantics": "body-level SE(2): x, y, cos(yaw), sin(yaw); no foot/joint/motor command",
         "source_normalizer_policy": "frozen from args.json",
-        "oracle_route": True,
-        "oracle_route_evidence": "tartan.data.features.build_model_features consumes future_gt and constructs lanes/route_lanes",
         "autonomous_navigation_claim": False,
         "device_requested": args.device,
     }
@@ -79,7 +75,6 @@ def main():
     })
     normalizer_reference = {
         "path": normalizer_path.name,
-        "sha256": file_sha256(normalizer_path),
     }
     audit["source_normalizers"] = normalizer_reference
     _write_json_atomic(out / "source_input_schema.json", source_input_schema(cfg, normalizer_reference))
@@ -88,10 +83,11 @@ def main():
         print(json.dumps({"status": "STATIC_AUDIT_COMPLETE", "cuda_signature": "NOT_RUN"}))
         return
     model.eval().cuda()
-    gt = np.zeros((80, 3), dtype=np.float32)
-    gt[:, 0] = np.linspace(0.1, 8.0, 80)
-    features = build_model_features(cfg, gt, "anymal")
-    inputs = stack_features([features], torch.device("cuda"))
+    if not args.source_cache:
+        raise ValueError("CUDA forward requires --source-cache with real nuPlan observations")
+    cache = torch.load(args.source_cache, map_location="cpu", weights_only=False)
+    keys = source_input_schema(cfg)["fields"]
+    inputs = {key: cache[key][:1].cuda() for key in keys}
     normalized = cfg.observation_normalizer(inputs)
     outputs = []
     for _ in range(2):
@@ -105,11 +101,10 @@ def main():
         outputs.append(pred)
     if not np.array_equal(outputs[0], outputs[1]):
         raise RuntimeError("Fixed-seed CUDA outputs are not bitwise identical")
-    raw = outputs[0].tobytes()
-    np.savez_compressed(out / "source_output_signature.npz", prediction=outputs[0], seed=args.seed, sha256=np.array(hashlib.sha256(raw).hexdigest()), mean=outputs[0].mean(), std=outputs[0].std())
-    audit.update({"cuda_forward": True, "deterministic_repeat": True, "output_sha256": hashlib.sha256(raw).hexdigest(), "output_mean": float(outputs[0].mean()), "output_std": float(outputs[0].std()), "output_shape": list(outputs[0].shape)})
+    np.savez_compressed(out / "source_output_signature.npz", prediction=outputs[0], seed=args.seed, mean=outputs[0].mean(), std=outputs[0].std())
+    audit.update({"cuda_forward": True, "deterministic_repeat": True, "output_mean": float(outputs[0].mean()), "output_std": float(outputs[0].std()), "output_shape": list(outputs[0].shape)})
     _write_json_atomic(out / "source_model_audit.json", audit)
-    print(json.dumps({"status": "CUDA_AUDIT_COMPLETE", "output_sha256": audit["output_sha256"]}))
+    print(json.dumps({"status": "CUDA_AUDIT_COMPLETE"}))
 
 
 if __name__ == "__main__":

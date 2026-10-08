@@ -86,12 +86,12 @@ class RunIdentity:
 def source_input_schema(config, normalizer_reference: Dict[str, str] = None) -> Dict[str, object]:
     fields = {
         "ego_current_state": (["B", 10], "float32", "observed/current state"),
-        "neighbor_agents_past": (["B", config.agent_num, config.time_len, config.agent_state_dim], "float32", "observed history; Tartan adapter zero-pads"),
-        "static_objects": (["B", config.static_objects_num, config.static_objects_state_dim], "float32", "observed; Tartan adapter zero-pads"),
-        "lanes": (["B", config.lane_num, config.lane_len, config.lane_state_dim], "float32", "map in nuPlan; oracle future corridor in current Tartan adapter"),
+        "neighbor_agents_past": (["B", config.agent_num, config.time_len, config.agent_state_dim], "float32", "observed history; target zero-pads absent actors"),
+        "static_objects": (["B", config.static_objects_num, config.static_objects_state_dim], "float32", "observed; target zero-pads absent objects"),
+        "lanes": (["B", config.lane_num, config.lane_len, config.lane_state_dim], "float32", "observed native nuPlan map lanes; target occupancy map"),
         "lanes_speed_limit": (["B", config.lane_num, 1], "float32", "map; Tartan zero-pads"),
         "lanes_has_speed_limit": (["B", config.lane_num, 1], "bool", "map; Tartan zero-pads"),
-        "route_lanes": (["B", config.route_num, config.route_len, config.route_state_dim], "float32", "route in nuPlan; future_gt-derived oracle in current Tartan adapter"),
+        "route_lanes": (["B", config.route_num, config.route_len, config.route_state_dim], "float32", "native nuPlan route; target observed occupancy plus fixed goal"),
         "route_lanes_speed_limit": (["B", config.route_num, 1], "float32", "route/map; Tartan zero-pads"),
         "route_lanes_has_speed_limit": (["B", config.route_num, 1], "bool", "route/map; Tartan zero-pads"),
     }
@@ -104,7 +104,6 @@ def source_input_schema(config, normalizer_reference: Dict[str, str] = None) -> 
             "state": config.state_normalizer.to_dict(),
             "artifact": normalizer_reference,
         },
-        "oracle_route": True,
-        "oracle_route_reason": "tartan.data.features.build_model_features(future_gt, ...) constructs lanes and route_lanes from future_gt",
+        "future_gt_as_input": False,
         "canonical_types": [asdict(RunIdentity("example", "transfer_primary", "unset", "unset", "source_regression", "na", 0))],
     }

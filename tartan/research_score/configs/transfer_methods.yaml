@@ -1,0 +1,164 @@
+protocol: transfer-navigation-sr
+target_budget_percent: 1
+repeat_id: 11
+trajectory:
+  length_m: 8
+  points: 80
+methods:
+  pretrain_finetune:
+    profile: transfer_primary
+    initialization: nuplan
+    source_data: false
+  pretrain_adapter:
+    profile: transfer_primary
+    initialization: nuplan
+    source_data: false
+  joint_train:
+    profile: transfer_primary
+    initialization: nuplan
+    source_data: true
+  emb_cond_diffusion:
+    profile: transfer_primary
+    initialization: nuplan
+    source_data: true
+fairness:
+  same_target_manifest: true
+  same_target_budget: true
+  same_output_points: true
+  same_goal_benchmark: true
+  future_gt_as_input: false
+paths:
+  project_root: ${PROJECT_ROOT}
+  tartan_root: ${TARTAN_ROOT}
+  source_args: ${SOURCE_ARGS}
+  source_checkpoint: ${SOURCE_CKPT}
+  output_root: ${OUTPUT_ROOT}
+  train_cache: ${TRAIN_CACHE}
+  val_cache: ${VAL_CACHE}
+  source_cache: ${SOURCE_CACHE}
+  val_navigation_manifest: ${VAL_NAVIGATION_MANIFEST}
+  test_navigation_manifest: ${TEST_NAVIGATION_MANIFEST}
+proxy_ab:
+  protocol_revision: proxy-ab-history-observed-reference
+  reference_pose_policy: observed_lcam_front_reference
+  reference_approval_record: /tj-share/cross_diffusion_workdir/runs/20261002T045353Z_proxy_cpu/reference_approval.json
+  profile: proxy_ab
+  methods:
+  - proxy_a
+  - proxy_b
+  seed: 11
+  initialization:
+    kind: original_nuplan_only
+    checkpoint: /zeron-vepfs/tjqc/cross-diffusion/checkpoints/model.pth
+    args: /zeron-vepfs/tjqc/cross-diffusion/checkpoints/args.json
+    provenance_verified: true
+    provenance_record: /tj-share/cross_diffusion_workdir/runs/20261002T045353Z_proxy_cpu/source_provenance.json
+    source_update: false
+  batch_size: 64
+  pair_batch_size: 32
+  microbatch_size: 64
+  pair_microbatch_size: 32
+  optimizer: AdamW
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  grad_clip: 5.0
+  amp: true
+  min_updates: 5000
+  max_updates: 10000
+  val_every: 250
+  patience: 10
+  scheduler:
+    mode: max
+    factor: 0.5
+    patience: 2
+    min_lr: 5.0e-06
+    threshold: 0.0
+    threshold_mode: abs
+    cooldown: 0
+    eps: 1.0e-08
+  objective:
+    lambda_inv: 0.1
+    lambda_swap: 0.1
+    lambda_sep: 0.01
+    residual_weight: 1.0
+    grl: 1.0
+    common_scale:
+    - 20.0
+    - 20.0
+    - 1.0
+    - 1.0
+    point_sse_normalization: true
+  history:
+    steps: 20
+    latent_dim: 16
+    hidden_dim: 64
+    context_dim: 22
+    input_dim: 138
+    xy_scale_m: 20.0
+    dt_scale_s: 1.0
+    motion_scale:
+    - 1.0
+    - 1.0
+    - 1.0
+    policy: past20_anchor_exclusive
+    frozen_task_history: true
+  id_dropout: 0.2
+  platform_ids:
+    car: 0
+    anymal: 1
+    diff: 2
+    omni: 3
+  robot_radius_m:
+    anymal: 0.35
+    diff: 0.5
+    omni: 0.5
+  rng:
+    base_sampler: 11
+    base_noise: 11
+    pair_sampler: 12
+    pair_noise: 13
+    id_dropout: 14
+    base_model_offset: 11
+    pair_model_offset: 100000
+    validation: 20260914
+  trajectory:
+    length_m: 8.0
+    points: 80
+    arc_metric: xy
+    representation_policy: anchor-inclusive-xy-8m-80-first-duplicate
+  normalizer_policy: frozen_checkpoint_args
+  selection:
+    order:
+    - episode_macro_sr
+    - episode_macro_spl
+    - lower_episode_macro_cr
+    - goal_progress
+    - earlier_update
+    stale_metric: sr
+  navigation:
+    execute_m: 1.0
+    interpolation_m: 0.1
+    max_replans: 16
+    success_distance_m: 0.75
+    stuck_steps: 3
+    stuck_distance_m: 0.05
+    seed_offset: 10000
+    seed_task_multiplier: 100
+  cpu_smoke:
+    base_batch_size: 2
+    pair_batch_size: 1
+    max_updates: 2
+    amp: false
+    purpose: engineering_cpu
+    eligible_for_formal_result: false
+  gpu_smoke:
+    max_updates: 4
+    min_updates: 0
+    val_every: 2
+    purpose: engineering_smoke
+    eligible_for_formal_result: false
+    resume_rtol: 0.0001
+    resume_atol: 1.0e-06
+  paths:
+    output_root: /tj-share/cross_diffusion_workdir
+    data_id: ${DATA_ID}

@@ -1,11 +1,14 @@
-# Research-score 代码导航
-这个子包包含跨具身研究的新增逻辑，不修改原始 Diffusion-Planner 主干的基础结构。
+# Research-score当前入口
 
-- `configs/`：冻结的数据分割、轨迹表示和路线参数。
-- `data/`：8 m/80点重采样、路线生成、表示桥接和分组分割。
-- `model/`：`EmbodimentEncoder` 和 `ZeroResidualAdapter`，由 `ScoreDecompositionPlanner` 包装主干。
-- `training/`：预先物化的 ANYmal 与 Car 特征缓存数据集。
-- `evaluation/`：固定目标路线、闭环控制、碰撞、SPL 与终止条件。
-- `scripts/`：名字按功能划分：`build_*`、`materialize_*`、`train_*`、`evaluate_*`、`summarize_*`、`run_stage07_*`。
-- `tests/`：分割、无未来信息、路线、碰撞和模型包装的测试。
-正式闭环主入口是 `scripts/run_stage07_nonoverlap_eval.sh`；它只评价四种保留方法的收敛 checkpoint，并在同一批63个非重叠8 m 任务上比较。
+此包名表示研究代码范围，模型输出score字段仍是归一化x0轨迹，不能据此声称因果score。
+
+- data/：目标fixed-arc、源表示桥、预算、occupancy路线、契约。
+- model/：共享backbone外的embodiment条件与零初始化residual。
+- training/：manifest到缓存Dataset、loss原语、方法边界。
+- evaluation/：D024、安全停车、碰撞、最短路与SR选模指标。
+- scripts/：单一正式train_transfer/evaluate_navigation/build_navigation_tasks/summarize_navigation入口。
+- configs/：独立transfer_primary和当前proxy_ab配置。
+- preflight/：按profile隔离的当前输入、协议、资源和输出检查。
+- tests/：相关协议与实现回归。
+
+正式训练：scripts/run_transfer_training.sh；测试：scripts/run_transfer_evaluation.sh。Proxy使用相同入口的PROFILE=proxy_ab分支，CPU及218/20增量已通过，GPU阶段待执行。详见根ARCHITECTURE.md、两份协议及唯一执行计划。

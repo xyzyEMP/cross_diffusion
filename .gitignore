@@ -5,20 +5,9 @@ __pycache__/
 .DS_Store
 local.env
 .env
-
-# Kept locally for experiment governance and handoff; not published.
 AGENTS.md
-docs/
 experiment_execution_plan/
-run.md
-tartan/research_plan/
-
-# Checkpoints, caches, and experiment products stay on the shared data volume.
 checkpoints/*.pth
-tartan/cache/
-tartan/outputs/
-outputs/
-research_score_v1_2/
 *.pt
 *.npy
 *.npz

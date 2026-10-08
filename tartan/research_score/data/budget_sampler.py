@@ -5,7 +5,6 @@ import math
 from collections import Counter, defaultdict
 from typing import Dict, List, Mapping, Sequence, Tuple
 
-from .core import nested_budgets
 
 
 def _rank(seed: int, value: str) -> str:
@@ -95,4 +94,4 @@ def nested_window_budgets(
     }
 
 
-__all__ = ["nested_budgets", "nested_window_budgets"]
+__all__ = ["nested_window_budgets"]

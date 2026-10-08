@@ -31,3 +31,27 @@ def visualize_pair(pair: CandidatePair, output_path: Path) -> None:
     figure.tight_layout()
     figure.savefig(output_path, dpi=150)
     plt.close(figure)
+
+
+def visualize_reconstructed_pair(record, paths, output_path):
+    """At most six deterministic plots, all in the observed Diff body frame."""
+    output_path = Path(output_path)
+    if output_path.exists():
+        return
+    figure, axis = plt.subplots(figsize=(8, 7))
+    for side, path in zip(("Diff", "Omni"), paths):
+        axis.plot(path[:, 0], path[:, 1], label=side+" rebuilt 8m / 80 valid")
+        axis.scatter(*path[0, :2], marker="o")
+        axis.scatter(*path[-1, :2], marker="X", label=side+" own goal")
+    metrics = record["metrics_8m"]
+    axis.set_title(record["pair_id"]+"\nDiff observed-anchor common frame; common_goal_id=null\n"+
+                   ", ".join(f"{key}={metrics[key]:.3f}m" for key in ("entry_distance", "exit_distance", "mean_path_distance", "max_path_distance"))+"\n"+
+                   ("accepted "+record["split"] if record["pair_valid"] else "rejected: "+",".join(record["rejection_reasons"])), fontsize=8)
+    axis.set(xlabel="Diff local x [m]", ylabel="Diff local y [m]")
+    axis.set_aspect("equal", adjustable="box")
+    axis.grid(alpha=.3)
+    axis.legend(fontsize=8)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=120)
+    plt.close(figure)

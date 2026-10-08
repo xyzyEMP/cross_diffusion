@@ -1,8 +1,9 @@
 from __future__ import annotations
-import argparse,json,os,random,subprocess,tempfile
+from tartan.research_score.artifacts import publish
+import argparse,json,random
 from pathlib import Path
 import numpy as np,torch
-from tartan.research_score.model.representation_bridge import TrajectoryRepresentationBridge
+from tartan.research_score.data.source_representation import TrajectoryRepresentationBridge
 
 KEYS=("ego_current_state","neighbor_agents_past","lanes","lanes_speed_limit","lanes_has_speed_limit","route_lanes","route_lanes_speed_limit","route_lanes_has_speed_limit","static_objects")
 def main():
@@ -15,8 +16,6 @@ def main():
   y,m=bridge(z['ego_agent_future']);ys.append(torch.from_numpy(y));ms.append(torch.from_numpy(m));paths.append(rows[i])
   if n%250==0:print(json.dumps({'built':n,'total':len(indices)}),flush=True)
  obj={k:torch.stack(v) for k,v in data.items()};obj.update({'trajectory':torch.stack(ys),'valid_mask':torch.stack(ms),'source_paths':paths,'manifest_pool_size':len(rows),'selection_seed':a.seed})
- fd,tmp=tempfile.mkstemp(prefix='source_features_',suffix='.pt');os.close(fd)
- try:torch.save(obj,tmp);subprocess.run(['dd',f'if={tmp}',f'of={out}','conv=fsync','status=none'],check=True)
- finally:Path(tmp).unlink(missing_ok=True)
+ publish(obj,out)
  print(json.dumps({'status':'complete','samples':len(indices),'manifest_pool_size':len(rows),'bytes':out.stat().st_size}))
 if __name__=='__main__':main()

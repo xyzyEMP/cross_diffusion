@@ -6,17 +6,16 @@ import torch
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.config import Config
-from tartan.data.features import build_model_features
 from tartan.research_score.data.schema import CanonicalObservation, CanonicalTrajectory, RunIdentity, source_input_schema
 
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_source_schema_and_oracle_boundary():
+def test_source_schema_observed_inputs():
     cfg = Config(str(ROOT / "checkpoints/args.json"), guidance_fn=None)
     schema = source_input_schema(cfg)
-    assert schema["oracle_route"] is True
+    assert schema["future_gt_as_input"] is False
     assert schema["fields"]["route_lanes"]["shape"] == ["B", 25, 20, 12]
     assert schema["normalization"]["policy"] == "frozen_from_checkpoint_args"
     assert schema["normalization"]["observation"]
@@ -31,16 +30,9 @@ def test_canonical_dataclasses_construct():
     RunIdentity("r", "transfer_primary", "d", "train", "m", "100", 1)
 
 
-def test_tartan_features_are_checkpoint_compatible_and_future_dependent():
-    cfg = Config(str(ROOT / "checkpoints/args.json"), guidance_fn=None)
-    a = np.zeros((80, 3), dtype=np.float32); a[:, 0] = np.linspace(.1, 8, 80)
-    b = a.copy(); b[:, 1] = np.linspace(0, 2, 80)
-    fa, fb = build_model_features(cfg, a, "anymal"), build_model_features(cfg, b, "anymal")
-    assert fa["route_lanes"].shape == (25, 20, 12)
-    assert not torch.equal(fa["route_lanes"], fb["route_lanes"])
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="Stage 02 CUDA regression requires an attached GPU")
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="Source checkpoint regression requires an attached GPU")
 def test_checkpoint_strict_cuda_load():
     cfg = Config(str(ROOT / "checkpoints/args.json"), guidance_fn=None); cfg.device = "cuda"
     model = Diffusion_Planner(cfg)

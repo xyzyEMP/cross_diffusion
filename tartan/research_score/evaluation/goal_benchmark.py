@@ -2,21 +2,22 @@ from __future__ import annotations
 import copy,hashlib,json
 from pathlib import Path
 import numpy as np
+from tartan.data.pose_utils import load_occupancy_record
 from tartan.research_score.data.route_builder import OccupancyRouteSetBuilder,RouteSpec
 from .collision import path_collision
 from .metrics_navigation import aggregate,episode_metrics,path_length
 from .shortest_path import astar,inflate,nearest_free,sparse_grid
 
-ROBOT_RADIUS={"anymal":0.35,"diff":0.50}
+ROBOT_RADIUS={"anymal":0.35,"diff":0.50,"omni":0.50}
 REPLAN_STEPS=10;MAX_STEPS=80;GOAL_RADIUS_M=.75
 def route_digest(route):return hashlib.sha256(route["route_candidates_xy"].tobytes()+route["route_candidate_mask"].tobytes()).hexdigest()
 def build_from_record(record):
-    sparse=np.load(record["route_set"]["map_reference"],allow_pickle=False);goal=np.asarray(record["fixed_goal"]["xy_local"],float)
-    return OccupancyRouteSetBuilder(RouteSpec(max_candidates=6,points_per_candidate=80)).build(sparse,goal),sparse,goal
+    sparse=load_occupancy_record(record);goal=np.asarray(record["fixed_goal"]["xy_local"],float)
+    return OccupancyRouteSetBuilder(RouteSpec(max_candidates=6,points_per_candidate=80),grid_size=101 if record.get("profile")=="proxy_ab" else None).build(sparse,goal),sparse,goal
 
 def prepare_episode(record,robot,base=None):
     route,sparse,goal=base if base is not None else build_from_record(record)
-    blocked=inflate(sparse_grid(sparse),ROBOT_RADIUS[robot]/0.5);start=np.asarray(route["grid_start"])
+    blocked=inflate(sparse_grid(sparse,101 if record.get("profile")=="proxy_ab" else None),ROBOT_RADIUS[robot]/0.5);start=np.asarray(route["grid_start"])
     goal_cell=np.rint(goal/0.5+start).astype(int);s=nearest_free(blocked,start);g=nearest_free(blocked,goal_cell)
     cells,shortest=(None,float("inf")) if s is None or g is None else astar(blocked,s,g,0.5)
     return route,blocked,start,goal,cells,shortest,s,bool(blocked[tuple(start)])
