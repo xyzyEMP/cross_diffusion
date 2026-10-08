@@ -49,7 +49,7 @@ g4物化可复用本轮g1/g2/g3相同sample_id的确定性物理特征，先核�
 
 共享数据分别为`data/20261008T132918Z_four_groups_g1`至`_g4`，cache同DATA_ID；主run保存actual config/commands/logs、preflight、每组smoke/train/eval、last/best、summary/report/main_table。2张L20按g1+g2、g3+g4分两批，每GPU一个任务。原实验和已完成消融不重跑。
 
-运行工程恢复（2026-10-08T162347Z）：g3 smoke来源JSON出现已观测共享盘零页，未开始正式更新；一次fadvise证实原始记录完整。共用artifact仅在实际读到不一致后刷新一次，二次仍不一致必须失败。原runner等待g4期间不重复启动；其退出后同RUN_ID跳过完成组并补接g3。该工程修复不改变冻结数据、初始化、loss、预算或指标。
+运行工程恢复（2026-10-08T162347Z）：g3 smoke来源JSON出现已观测共享盘零页，未开始正式更新；一次fadvise证实原始记录完整。共用artifact仅在实际读到不一致后刷新一次，二次仍不一致必须失败。原runner1136已在g4完成后退出；确认无活动进程后同RUN_ID恢复PID1987，跳过g1/g2/g4，g3四更新smoke已完成并进入正式训练。恢复保留故障证据及冻结说明，pending按实际完成状态记录。该工程修复不改变冻结数据、初始化、loss、预算或指标。
 
 <!-- HISTORICAL_TRANSFER_PROTOCOL -->
 

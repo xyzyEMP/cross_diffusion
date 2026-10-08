@@ -177,7 +177,7 @@ Proxy调用（真实CPU及正式GPU全链通过）：Dataset/cache物理history�
 | `tartan/research_score/scripts/materialize_source_features.py` | 确定性选择源NPZ并按既有source桥语义生成4096特征缓存 | 迁移数据/训练/导航 |
 | `tartan/research_score/scripts/materialize_target_features.py` | 唯一manifest到目标特征cache物化；复用TartanTargetDataset | 迁移数据/训练/导航 |
 | `tartan/research_score/scripts/run_transfer_evaluation.sh` | 唯一正式测试调度；加载navigation_best并消费冻结test任务 | 迁移数据/训练/导航 |
-| `tartan/research_score/scripts/run_transfer_training.sh` | legacy矩阵与Proxy两任务CPU/GPU/formal调度；同run状态与完整恢复 | 迁移数据/训练/导航 |
+| `tartan/research_score/scripts/run_transfer_training.sh` | legacy矩阵、Proxy及四组调度；同run恢复保留证据/冻结说明，按实际train+eval完成状态跳过并记录pending | 迁移数据/训练/导航 |
 | `tartan/research_score/scripts/summarize_navigation.py` | 合并正式训练/导航结果为主表；报告选中checkpoint验证SR | 迁移数据/训练/导航 |
 | `tartan/research_score/scripts/train_transfer.py` | 唯一四方法target-update训练、SR导航验证选模/早停与checkpoint写出 | 迁移数据/训练/导航 |
 | `tartan/research_score/scripts/validate_transfer_manifests.py` | 冻结源审计、训练长度覆盖、完整episode隔离和80点mask校验 | 迁移数据/训练/导航 |

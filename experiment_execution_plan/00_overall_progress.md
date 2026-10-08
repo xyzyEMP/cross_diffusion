@@ -4,7 +4,7 @@
 
 用户批准g1 ANYmal70/10/20、g2 Omni70/10/20、g3 Diff70/10/20、g4 Diff+Omni分别80/20→全部24条ANYmal；四组统一普通backbone无history/RMS，每5完整epoch验证。RUN_ID=`20261008T132918Z_four_groups`，DATA_ID为该ID分别加_g1…_g4，catalog来自已验收20261002T045353Z_proxy_cpu。来源、表示、预算、评价及最新原实验1区别见TRAINING_PROTOCOL开头。
 
-本机实现与CPU验证已完成：72 passed、1 skipped（本机无GPU，跳过现有CUDA source regression）；5epoch完整遍历/恢复边界、70/10/20和80/20完整trajectory隔离、0.1…8m完整80站点、原proxy ANYmal禁训、缓存表示及旧恢复接口覆盖。shell语法与模块编译通过。未把测试通过当作实验完成。服务器2张L20；真实cache/preflight四组全部PASS。截至2026-10-08T162347Z，g1/g2训练/最终评价完成（各5120update/160epoch），g4训练中（最近4019update）；g3来源记录发布遇到共享盘零页、smoke未开始更新，无checkpoint。一次fadvise确认内容完整，artifact改为读到不一致后一次刷新，10项相关测试通过。原runner仍等待g4，待其退出后同RUN_ID补接g3，严禁并发重启。全四组报告尚未完成。
+本机实现与CPU验证已完成：72 passed、1 skipped（本机无GPU，跳过现有CUDA source regression）；5epoch完整遍历/恢复边界、70/10/20和80/20完整trajectory隔离、0.1…8m完整80站点、原proxy ANYmal禁训、缓存表示及旧恢复接口覆盖。shell语法与模块编译通过。未把测试通过当作实验完成。服务器2张L20；真实cache/preflight四组全部PASS。g1/g2训练/最终评价完成（各5120update/160epoch），g4训练/全部24条ANYmal最终评价完成（5025update/75epoch、best335）。g3曾在smoke来源发布读到共享盘288字节零页，artifact最小修复和10项测试通过；原runner1136退出后确认无活动进程，同RUN_ID恢复PID1987，g3四更新AMP smoke完成，进入原始nuPlan独立初始化正式训练。只剩g3及最终报告，其他组、缓存和预检均跳过。
 
 说明位置：正式源码TRAINING_PROTOCOL.md；主run/experiment_description.md；历史归档archive/experiment1/{README.md,code/,results/,stage_summary_20260929.md,source_record.json}。归档仅最新原实验1入口/依赖43个文件和保留SPL-first结果，原目录不删；用户明确授权输出盘归档例外。g1完成后报告与旧100%指标差值；g4同时导出g1同5条测试子集，无额外模型前向。
 

@@ -1,6 +1,6 @@
 # 服务器交接
 
-当前RUN_ID=`20261008T132918Z_four_groups`，原runner PID1136仍等待g4，禁止重复启动。g1/g2训练与最终评价完成（5120update/160epoch），g4最近4019update，g3在15:40Z来源元数据发布读到288字节零页、smoke失败，尚无训练更新/checkpoint。一轮fadvise已确认源记录正确；artifacts.py已改为实际读错后刷新一次，持续不一致仍报错，10项相关测试通过。待原runner/g4退出后用下方同RUN_ID命令补接g3；既有完成组/缓存/preflight不重跑。整轮尚未完成，详见PROJECT_STATUS及run/status.json。
+当前RUN_ID=`20261008T132918Z_four_groups`，同RUN_ID续接runner PID1987，禁止重复启动。g1/g2训练与最终评价完成（5120update/160epoch），g4训练和全部24条ANYmal评价完成（5025update/75epoch，best335）。g3曾因来源JSON共享盘零页在smoke停止；一次fadvise确认内容完整，artifact最小修复与10项测试通过。原runner1136退出后确认无活动进程并恢复；g3四更新AMP smoke完成，当前pending仅g3，进入独立原始nuPlan正式训练。完成组/缓存/preflight不重跑；状态/故障证据保留，冻结说明与配置不覆盖。整轮尚未完成，详见PROJECT_STATUS及run/status.json。
 
 服务器源码/zeron-vepfs/tjqc/cross-diffusion，Python/root/miniconda3/envs/diffusion-planner/bin/python，SSH cross-diff，全部产物/tj-share/cross_diffusion_workdir。主run=runs/20261008T132918Z_four_groups；DATA_ID分别为该ID加_g1…_g4。配置冻结在run/config.yaml，说明为run/experiment_description.md；来源catalog=data/20261002T045353Z_proxy_cpu/trajectories.jsonl，原始nuPlan来源record仍在对应CPU run/source_provenance.json。
 

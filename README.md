@@ -1,6 +1,6 @@
 # Cross-Diffusion
 
-当前四组统一普通Diffusion Planner实验：RUN_ID=`20261008T132918Z_four_groups`，状态`GPU_RUNNING`。四组真实缓存和preflight已完成，g1/g2训练与最终评价完成，g4训练中；g3因已定位的共享盘元数据零页在smoke阶段停止，修复已通过测试，待原runner退出后同RUN_ID补接。整轮尚未完成。
+当前四组统一普通Diffusion Planner实验：RUN_ID=`20261008T132918Z_four_groups`，状态`GPU_RUNNING`。四组真实缓存和preflight已完成，g1/g2/g4训练与最终评价完成；g3已修复共享盘元数据问题并通过GPU smoke，同RUN_ID恢复为PID1987，仅第三组训练/评价及最终汇总待完成。
 
 | 组 | 完整trajectory train/val/test | 最终测试 |
 |---|---|---|

@@ -4,11 +4,11 @@
 
 ## 四组当前进度
 
-RUN_ID=`20261008T132918Z_four_groups`；状态`GPU_RUNNING`，服务器进程PID1136。数据/缓存DATA_ID为RUN_ID加_g1…_g4；catalog DATA_ID=`20261002T045353Z_proxy_cpu`。g1 ANYmal17/2/5，g2 Omni4/1/1，g3 Diff3/1/1，g4 Diff4/1+Omni5/1→全部24条ANYmal。完整轨迹先冻结，seed20260911；普通backbone、训练seed11、原始nuPlan独立初始化，无history/RMS/adapter/pair；每5完整epoch验证，推理seed11/23/47。准确预算、几何、控制器和旧实验1差异见TRAINING_PROTOCOL开头。
+RUN_ID=`20261008T132918Z_four_groups`；状态`GPU_RUNNING`，服务器进程PID1987。数据/缓存DATA_ID为RUN_ID加_g1…_g4；catalog DATA_ID=`20261002T045353Z_proxy_cpu`。g1 ANYmal17/2/5，g2 Omni4/1/1，g3 Diff3/1/1，g4 Diff4/1+Omni5/1→全部24条ANYmal。完整轨迹先冻结，seed20260911；普通backbone、训练seed11、原始nuPlan独立初始化，无history/RMS/adapter/pair；每5完整epoch验证，推理seed11/23/47。准确预算、几何、控制器和旧实验1差异见TRAINING_PROTOCOL开头。
 
 已完成：现有模块接通四组配置、完整8米未来80站点、明确cache表示隔离、每5完整epoch验证与恢复边界、最终三seed评价、g4同g1测试子集汇总、g1对旧实验1比较；本机72测试通过、1因无GPU跳过，架构清单与shell/编译通过；服务器架构/入口兼容通过。原实验1服务器独立归档已发布，43个必要源码文件，复制462MiB保留结果，2048行训练membership/35任务val/63任务test输入，原件保留，无hash。
 
-运行实况（2026-10-08T162347Z检查）：四组cache/preflight已通过，CPU_READY=true。g1/g2训练和三seed最终评价完成，各160epoch/5120update，best分别10epoch/320及20epoch/640；g4正式训练中，最近读取4019update/59完整epoch。g3于15:40Z在GPU smoke来源记录发布时读到288字节零页而停止，未进入正式训练、无checkpoint；一次fadvise后正确JSON恢复。共享artifact已修复为发生读取不一致后一次刷新再验证，持续不一致仍失败，相关10项测试通过。原runner PID1136仍等待g4，禁止并发重启；待其退出后同RUN_ID补接g3，跳过g1/g2及已完成g4。整轮尚未完成。
+运行实况（2026-10-08 UTC续接节点）：四组cache/preflight已通过，CPU_READY=true。g1/g2训练和三seed最终评价完成，各160epoch/5120update，best分别10epoch/320及20epoch/640；g4训练及全部24条ANYmal评价也完成，75epoch/5025update，best5epoch/335。g3曾在smoke来源发布时读到288字节共享盘零页而停止；一次fadvise确认原记录正确，共享artifact已修复并通过10项相关测试。原runner1136退出后确认无活动任务，已用同RUN_ID恢复为PID1987；g3四更新AMP smoke完成，进入独立原始nuPlan正式训练。pending仅g3，已完成组/缓存/preflight均跳过。整轮最终汇总尚未完成。
 
 路径：主run=`/tj-share/cross_diffusion_workdir/runs/20261008T132918Z_four_groups`；说明=`experiment_description.md`；实际冻结配置=`config.yaml`；缓存和manifest在输出根cache/data相同DATA_ID。train/g1…g4保留last/navigation_best，eval/g1…g4保存offline/navigation；完成后summary.json/report.md/main_table.csv给出本轮结果和原实验1差值。恢复必须同RUN_ID，在确认原runner无活动后执行run/continue.sh，不并发重复启动。
 
@@ -29,7 +29,7 @@ RUN_ID=`20261008T132918Z_four_groups`；状态`GPU_RUNNING`，服务器进程PID
 
 参考点是证据支持的前相机观测点，真实base外参未知；圆形footprint和路径执行仍是代理；本轮统一用预测yaw续接参考系，已修复位移方向替代观测heading的接口不一致。原occupancy直接把0.2米索引解释成0.5米，已核实2.5倍尺度假设差异；本轮按bounds/完整姿态显式转换，101×101@0.5米仍约50米范围。新旧高分不能等价因果比较。真实记录路径与碰撞代理可能冲突，预检记录并保留任务，不放宽阈值。单地图、单训练seed和少量独立validation trajectory仍限制结论。
 
-下一阶段：g4训练/评价结束并原runner退出→同RUN_ID补接g3独立原始nuPlansmoke/正式训练/评价→四组汇总、g1原实验1比较/g4同5条子集→分析并同步文档/GitHub。当前run/status.json为实际状态依据，报告未完成前不标COMPLETE。已授权完整执行，不重跑旧A/B或旧消融。
+下一阶段：g3正式训练/评价→四组汇总、g1原实验1比较/g4同5条子集→分析并同步文档/GitHub。当前run/status.json为实际状态依据，报告未完成前不标COMPLETE。已授权完整执行，不重跑旧A/B或旧消融。
 
 2026-10-08真实预检后的最小接口修正：four_groups闭环以预测轨迹在实际执行站点的yaw更新观测参考系，允许侧移朝向与位移方向不同；proxy_ab及旧实验1保留原位移heading行为。新g1四更新AMP smoke已通过（工程产物，不作性能结果）；smoke验证时钟明确为updates2/4，正式每5完整epoch。新修正由数学侧移/转向控制器测试覆盖，不需要机体外参猜测、不改loss或监督。
 
@@ -52,5 +52,6 @@ RUN_ID=`20261008T132918Z_four_groups`；状态`GPU_RUNNING`，服务器进程PID
 |---|---|---|---|
 | g1 | 37.1795/24.3590/36.7504% | 0.695163/1.492737 | 32.2955/27.0141/31.1675% |
 | g2 | 30.6667/23.1111/30.5162% | 0.502557/0.959891 | 37.2396/36.4583/37.1911% |
+| g4 | 30.8333/27.0000/30.7682%（Diff/Omni等权） | 0.693694/1.582624 | 35.6727/29.2401/35.6481%（全部24条ANYmal） |
 
-g1相对最新原实验1test SR下降35.6828pp、CR增加11.1374pp、SPL下降31.1554pp，为不同设置下描述差值；新旧测试仅P2003/P2012/P2015三条重合，不能单因素归因。新g1测试route_failure宏比例37.5844%，按D024留分母；不剔除以抬高SR。最终原因分析待四组完成。故障证据及恢复命令保存在同run/status.json；g3_smoke.log保留，不删除唯一诊断。
+g1相对最新原实验1test SR下降35.6828pp、CR增加11.1374pp、SPL下降31.1554pp，为不同设置下描述差值；新旧测试仅P2003/P2012/P2015三条重合，不能单因素归因。新g1测试route_failure宏比例37.5844%，按D024留分母；不剔除以抬高SR。最终原因分析待四组完成。故障证据及恢复命令保存在同run/status.json；g3_smoke.log保留，不删除唯一诊断。恢复后的runner保留旧状态/证据，按实际训练与评价完成状态更新pending，不覆盖已冻结的experiment_description/config；无需重跑已完成组。

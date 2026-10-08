@@ -12,16 +12,23 @@ if [[ ${PROFILE:-transfer_primary} == four_groups ]];then
  mkdir -p "$RUN/logs"
  export OMP_NUM_THREADS=8 OPENBLAS_NUM_THREADS=8
  "$PYTHON_BIN" - "$RUN" "$PROJECT" <<'PYSETUP'
-import json,sys
+import json,os,sys
 from pathlib import Path
 from tartan.research_score.artifacts import publish,publish_text
 run,project=map(Path,sys.argv[1:]);p=run/'status.json'
 if p.exists() and json.loads(p.read_text()).get('status')=='COMPLETE':raise SystemExit(0)
-status={'DATA_IDS':{g:run.name+'_'+g for g in ('g1','g2','g3','g4')},'CATALOG_DATA_ID':'20261002T045353Z_proxy_cpu','status':'PREPARING_DATA','RUN_ID':run.name,'profile':'four_groups','pending':['g1','g2','g3','g4'],'next_command':'PROFILE=four_groups RUN_ID='+run.name+' bash tartan/research_score/scripts/run_transfer_training.sh'}
+status=json.loads(p.read_text()) if p.exists() else {}
+groups=('g1','g2','g3','g4');complete=[]
+for group in groups:
+    train=run/'train'/group/'metrics.json';navigation=run/'eval'/group/'navigation'/'summary.json';offline=run/'eval'/group/'offline'/'summary.json'
+    if train.exists() and navigation.exists() and offline.exists() and json.loads(train.read_text())['status']=='complete' and json.loads(navigation.read_text())['status']=='complete':complete.append(group)
+status.update(DATA_IDS={g:run.name+'_'+g for g in groups},CATALOG_DATA_ID='20261002T045353Z_proxy_cpu',status='PREPARING_DATA',RUN_ID=run.name,profile='four_groups',pending=[g for g in groups if g not in complete],completed_groups=complete,active_groups=[],blocked_groups={},runner_pid=os.getppid(),next_command='PROFILE=four_groups RUN_ID='+run.name+' bash tartan/research_score/scripts/run_transfer_training.sh')
+status.pop('exit_code',None)
 publish(status,p,True)
 config_path=run/'config.yaml'
 if not config_path.exists():publish_text((project/'tartan/research_score/configs/transfer_methods.yaml').read_text(),config_path)
-protocol=(project/'TRAINING_PROTOCOL.md').read_text();publish_text(protocol.split('<!-- HISTORICAL_TRANSFER_PROTOCOL -->')[0],run/'experiment_description.md')
+if not (run/'experiment_description.md').exists():
+    protocol=(project/'TRAINING_PROTOCOL.md').read_text();publish_text(protocol.split('<!-- HISTORICAL_TRANSFER_PROTOCOL -->')[0],run/'experiment_description.md')
 publish_text('PROFILE=four_groups RUN_ID='+run.name+' bash '+str(project/'tartan/research_score/scripts/run_transfer_training.sh')+'\n',run/'continue.sh')
 PYSETUP
  trap 'code=$?; if [[ $code -ne 0 ]];then "$PYTHON_BIN" - "$RUN" "$code" <<"PYFAIL"
@@ -83,7 +90,7 @@ PYSMOKE
 import json,sys
 from pathlib import Path
 from tartan.research_score.artifacts import publish
-run=Path(sys.argv[1]);s=json.loads((run/'status.json').read_text());s['status']='GPU_RUNNING';publish(s,run/'status.json',True)
+run=Path(sys.argv[1]);s=json.loads((run/'status.json').read_text());s.update(status='GPU_RUNNING',active_groups=s['pending']);publish(s,run/'status.json',True)
 PYSTART
  # Two GPUs, one process per GPU. Complete each pair before the next pair.
  for pair in 'g1 g2' 'g3 g4';do
