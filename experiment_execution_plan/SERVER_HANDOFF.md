@@ -1,35 +1,20 @@
 # 服务器交接
 
-当前RUN_ID=`20261008T132918Z_four_groups`，同RUN_ID续接runner PID1987，禁止重复启动。g1/g2训练与最终评价完成（5120update/160epoch），g4训练和全部24条ANYmal评价完成（5025update/75epoch，best335）。g3曾因来源JSON共享盘零页在smoke停止；一次fadvise确认内容完整，artifact最小修复与10项测试通过。原runner1136退出后确认无活动进程并恢复；g3四更新AMP smoke完成，当前pending仅g3，进入独立原始nuPlan正式训练。完成组/缓存/preflight不重跑；状态/故障证据保留，冻结说明与配置不覆盖。整轮尚未完成，详见PROJECT_STATUS及run/status.json。
+更新2026-10-09（Asia/Shanghai）。RUN_ID=`20261008T132918Z_four_groups`，阶段COMPLETE；四组训练、全部最终测试及分析已经完成，无待续训练命令。不要重启或重跑完成组、CPU缓存、旧A/B/消融/无历史A。
 
-服务器源码/zeron-vepfs/tjqc/cross-diffusion，Python/root/miniconda3/envs/diffusion-planner/bin/python，SSH cross-diff，全部产物/tj-share/cross_diffusion_workdir。主run=runs/20261008T132918Z_four_groups；DATA_ID分别为该ID加_g1…_g4。配置冻结在run/config.yaml，说明为run/experiment_description.md；来源catalog=data/20261002T045353Z_proxy_cpu/trajectories.jsonl，原始nuPlan来源record仍在对应CPU run/source_provenance.json。
+服务器源码`/zeron-vepfs/tjqc/cross-diffusion`，Python`/root/miniconda3/envs/diffusion-planner/bin/python`，SSH cross-diff；全部正式产物`/tj-share/cross_diffusion_workdir`。主run为runs/20261008T132918Z_four_groups，DATA_IDS加_g1…g4，catalog为20261002T045353Z_proxy_cpu。说明/config/status/命令/log、CPU报告、train/eval结果保留。
 
-流程：四组完整trajectory冻结→真实完整8米/0.1…8m80未来站点cache→一次val几何检查→各组4update独立AMP smoke→普通无历史backbone独立原始nuPlan初始化→每5完整epoch验证/SR选模→各组3seed离线和导航→g1与原实验1对比/g4同g1五条子集→最终报告。2张L20，g1+g2、g3+g4两批，每卡一个任务。旧proxy_ab仍ANYmal禁训；仅four_groups g1允许ANYmal70/10/20。严禁以smoke或另一组checkpoint初始化。
-
-失败时先确认无活动训练/runner进程，读取短日志并修复，再恢复同RUN_ID：
-
-```bash
-cd /zeron-vepfs/tjqc/cross-diffusion
-PROFILE=four_groups RUN_ID=20261008T132918Z_four_groups bash tartan/research_score/scripts/run_transfer_training.sh
-```
-
-runner跳过完成组，从本组last完整恢复optimizer/scaler/scheduler/sampler/RNG；部分评价可同目录重算，保留冻结配置和唯一结果，不新建retry目录。完成后读取summary.json/report.md/main_table.csv，并更新唯一计划、PROJECT_STATUS、协议及GitHub；自动跟进在完成报告后删除，不重复通知。
-
-历史来源：archive/experiment1/{README.md,code/,results/,inputs/,stage_summary_20260929.md,source_record.json,archive_record.json}已发布，43必要源码、462MiB结果、训练membership2048行/val35/test63。原件results/transfer/20261001T154600Z_retained_spl_seed11保留。该目录仅用户授权历史参考，不加入当前源码入口/训练起点。其他归档留本机项目之外。
-
-已完成旧结果不重跑：原A/B runs/20261002T184606Z_proxy_seed11；validation消融 runs/20261002T203425Z_proxy_diagnosis；无历史A runs/20261008T090250Z_proxy_a_no_history。指标见PROJECT_STATUS/各run报告。D024 route_failure保留分母、不计碰撞；当前观测参考点/假定footprint/简化heading/单seed限制不伪造解除。保护手工未提交文档，不同步项目外其他历史，不宽泛删除或生成hash。
-
-2026-10-08真实预检后的最小接口修正：four_groups闭环以预测轨迹在实际执行站点的yaw更新观测参考系，允许侧移朝向与位移方向不同；proxy_ab及旧实验1保留原位移heading行为。新g1四更新AMP smoke已通过（工程产物，不作性能结果）；smoke验证时钟明确为updates2/4，正式每5完整epoch。新修正由数学侧移/转向控制器测试覆盖，不需要机体外参猜测、不改loss或监督。
-
-当前四组实际冻结窗口与导航任务（2026-10-08 CPU完成节点）：
-
-| 组 | train/val/test窗口 | val/test导航任务（每任务3个推理seed） |
+| 组 | updates/完整epoch/best update | test SR/CR/SPL |
 |---|---|---|
-| g1 | 2007/229/590 | 19/59 |
-| g2 | 2032/301/625 | 95/160 |
-| g3 | 1328/152/270 | 45/66 |
-| g4 | 4255/453/2826 | 140/296 |
+| g1 | 5120/160/320 | 32.2955/27.0141/31.1675% |
+| g2 | 5120/160/640 | 37.2396/36.4583/37.1911% |
+| g3 | 5040/240/1260 | 16.3399/47.7124/16.3399% |
+| g4 | 5025/75/335 | 35.6727/29.2401/35.6481% |
 
-`cpu_report.json`记录四组PASS和原始碰撞/起点/连通计数，计数存在重叠，不能相加当作排除数。共享盘g4新清单读到过陈旧页，一次fadvise后正常140条，生产端已复用artifact原子发布/刷新；同RUN_ID恢复，无重建cache，无删checkpoint。g4确定性特征已全部复用本轮前三组并逐点核对，split按自己的manifest更新；不是模型或训练统计共享。
+g4同g1五条子集SR30.4848%，未超过g1；新g1也未接近旧实验1SR67.9783%，split/监督/几何/控制器/选模预算/推理seed共同改变，不能单因素归因。后续目标需用户批准；可基于现有叠图和逐任务输出先定位几何/记录路径冲突，不直接增加预算或放宽阈值。
 
-自动续接=`analyze-four-group-diffusion-planner-study`，正常运行静默，故障最小修复同RUN_ID，全部完成后分析g1对旧实验1以及部分重合测试轨迹、g4同g1五条子集，再更新本机/服务器文档并推送GitHub，报告完成后删除自动任务。当前不得重新启动活跃runner；必要恢复命令保持同一RUN_ID。
+完整结果/分析为run/report.md、summary.json、main_table.csv、training_curves.png；逐行输出eval/g1…g4/{offline,navigation}/，唯一checkpoint为train/g1…g4/{last.pt,navigation_best.pt}。冻结配置config.yaml，说明experiment_description.md。旧实验1为archive/experiment1/{README.md,code/,results/,inputs/,stage_summary_20260929.md}，43必要旧代码和462MiB结果、2048train/35val/63test输入，原件保留，不是当前执行入口或起点。其他项目外历史不部署。
+
+g3曾在smoke来源JSON发布读到288字节零页，一次fadvise恢复完整EMA来源；artifact修复为实际读错后一次刷新，持续错误仍失败，相关10测试通过。原runner1136退出后确认无活动任务，同RUN_ID续接1987完成g3；smoke未初始化正式模型，完成组/CPU阶段未重跑。必要故障日志和原始来源记录保留。最终汇总只读已完成输出，无新增模型前向；新摘要与原metrics一致、子集覆盖完整，曲线一次检查通过。
+
+D024 route_failure留分母不计碰撞；ANYmal全部test禁训仍适用于旧proxy_ab，本轮g1域内训练仅four_groups例外。保护原数据/checkpoint/手工baseline_alignment.md和thesis_proposal.md，不提交或覆盖手工文件。GitHub只发布代码和简洁状态，实际发布版本见run/status.json；自动跟进交付后删除。

@@ -51,6 +51,8 @@ g4物化可复用本轮g1/g2/g3相同sample_id的确定性物理特征，先核�
 
 运行工程恢复（2026-10-08T162347Z）：g3 smoke来源JSON出现已观测共享盘零页，未开始正式更新；一次fadvise证实原始记录完整。共用artifact仅在实际读到不一致后刷新一次，二次仍不一致必须失败。原runner1136已在g4完成后退出；确认无活动进程后同RUN_ID恢复PID1987，跳过g1/g2/g4，g3四更新smoke已完成并进入正式训练。恢复保留故障证据及冻结说明，pending按实际完成状态记录。该工程修复不改变冻结数据、初始化、loss、预算或指标。
 
+完成节点（2026-10-09 Asia/Shanghai）：本run四组训练、最终离线/闭环评价及分析全部COMPLETE。实际更新5120/5120/5040/5025，best320/640/1260/335；test宏SR32.2955/37.2396/16.3399/35.6727%，g4同g1五条30.4848%，没有超过g1。详细loss、分平台val、完整测试及旧实验1对照见run/report.md、summary.json、main_table.csv、training_curves.png和PROJECT_STATUS；本完成记录不改变已冻结训练合同，不追加实验。
+
 <!-- HISTORICAL_TRANSFER_PROTOCOL -->
 
 # Cross-Diffusion 训练与测试协议

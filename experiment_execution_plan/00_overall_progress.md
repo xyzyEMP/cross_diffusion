@@ -1,14 +1,18 @@
 # 当前执行计划：Proxy A/B
 
-## 2026-10-08四组实验当前节点
+## 2026-10-09四组实验完成节点
 
-用户批准g1 ANYmal70/10/20、g2 Omni70/10/20、g3 Diff70/10/20、g4 Diff+Omni分别80/20→全部24条ANYmal；四组统一普通backbone无history/RMS，每5完整epoch验证。RUN_ID=`20261008T132918Z_four_groups`，DATA_ID为该ID分别加_g1…_g4，catalog来自已验收20261002T045353Z_proxy_cpu。来源、表示、预算、评价及最新原实验1区别见TRAINING_PROTOCOL开头。
+用户批准g1 ANYmal70/10/20（17/2/5）、g2 Omni4/1/1、g3 Diff3/1/1、g4 Diff4/1+Omni5/1→全部24条ANYmal。RUN_ID=`20261008T132918Z_four_groups`；DATA_IDS为该ID加_g1…g4，catalog=`20261002T045353Z_proxy_cpu`。四组普通backbone无history/RMS/pair，独立原始nuPlan EMA初始化，完整8米80未来站点，正式每5完整epoch验证/SR选模；最终推理11/23/47。范围/最新原实验1区别见TRAINING_PROTOCOL开头。
 
-本机实现与CPU验证已完成：72 passed、1 skipped（本机无GPU，跳过现有CUDA source regression）；5epoch完整遍历/恢复边界、70/10/20和80/20完整trajectory隔离、0.1…8m完整80站点、原proxy ANYmal禁训、缓存表示及旧恢复接口覆盖。shell语法与模块编译通过。未把测试通过当作实验完成。服务器2张L20；真实cache/preflight四组全部PASS。g1/g2训练/最终评价完成（各5120update/160epoch），g4训练/全部24条ANYmal最终评价完成（5025update/75epoch、best335）。g3曾在smoke来源发布读到共享盘288字节零页，artifact最小修复和10项测试通过；原runner1136退出后确认无活动进程，同RUN_ID恢复PID1987，g3四更新AMP smoke完成，进入原始nuPlan独立初始化正式训练。只剩g3及最终报告，其他组、缓存和预检均跳过。
+全部CPU准备、真实preflight、四组AMP smoke、正式训练、最终离线/闭环评价及分析均完成，阶段COMPLETE。实际更新/epoch/best：g1 5120/160/320，g2 5120/160/640，g3 5040/240/1260，g4 5025/75/335。test宏SR分别32.2955/37.2396/16.3399/35.6727%；g4同g1五条30.4848%，未超过g1。g1与旧100%test SR差−35.6828pp；共同三条也是描述对照，不作单因素归因。
 
-说明位置：正式源码TRAINING_PROTOCOL.md；主run/experiment_description.md；历史归档archive/experiment1/{README.md,code/,results/,stage_summary_20260929.md,source_record.json}。归档仅最新原实验1入口/依赖43个文件和保留SPL-first结果，原目录不删；用户明确授权输出盘归档例外。g1完成后报告与旧100%指标差值；g4同时导出g1同5条测试子集，无额外模型前向。
+窗口train/val/test：g1 2007/229/590，g2 2032/301/625，g3 1328/152/270，g4 4255/453/2826。最终导航raw/included/invalid：177/177/0、480/384/96、198/153/45、888/888/0；D024 route_failure保持分母。数据/checkpoint/唯一结果/手工文件保留，旧实验不重跑。
 
-下一命令：`PROFILE=four_groups RUN_ID=20261008T132918Z_four_groups bash tartan/research_score/scripts/run_transfer_training.sh`；由同一runner完成冻结、cache、一次几何preflight、各组4更新AMP smoke、原始nuPlan独立初始化训练及三seed离线/导航，最后汇总旧实验1对照。实际status/log/config/checkpoint位于/tj-share/cross_diffusion_workdir/runs/20261008T132918Z_four_groups。恢复同RUN_ID；不重跑完成组、不使用smoke起点。训练GPU0/1按两组一批，原Proxy结果和消融不改写。
+本机原完整72通过/1无GPU跳过；共享盘零页最小修复相关10项测试通过，g3失败来源JSON一次刷新后真实EMA证据恢复。原runner1136退出后无活动任务，同RUN_ID续接1987完成g3，未用smoke或其他组初始化；恢复保留状态/冻结说明且跳过完成组。最终汇总仅使用既有行结果，预算与原metrics一致、离线指标有限、同子集覆盖完整；训练曲线一次视觉检查通过。
+
+主产物`/tj-share/cross_diffusion_workdir/runs/20261008T132918Z_four_groups/{report.md,summary.json,main_table.csv,training_curves.png,status.json}`；原始config/说明、命令/log、train/g1…g4及eval/g1…g4保留。用户授权旧实验1archive/experiment1/{README.md,code/,results/,inputs/,stage_summary_20260929.md}仅历史参考，原件保留。完整分析/限制/说明位置见PROJECT_STATUS，源码职责ARCHITECTURE，交接SERVER_HANDOFF。
+
+下一命令：无，当前run已完成，不能重启当成新实验。后续优先定位占据图/观测参考点/footprint与记录路径的一致性，再经用户批准冻结固定split几何对照；本轮没有额外训练或测试调参。最终文档同步本机/服务器及GitHub，交付后删除当前heartbeat。
 
 
 更新：2026-10-03（Asia/Shanghai）。P0–P4/P5a已通过，218/20配对增量已通过；P5b(20261002T184329Z_proxy_gpu_smoke)已通过，P6/P7正式运行(20261002T184606Z_proxy_seed11)全部完成，状态COMPLETE。追加五项validation原因消融已完成，实际结果见第10节。

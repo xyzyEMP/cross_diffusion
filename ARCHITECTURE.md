@@ -1,8 +1,10 @@
 # 项目架构与文件清单
 
-更新：2026-10-08。此清单覆盖全部正式代码、测试、配置和维护文档。每个文件对应当前任务；未登记文件视为可疑。实验一以 TRAINING_PROTOCOL.md 为准，独立 Proxy A/B 以 proxy-training-protocol.md 为准，执行规则见 AGENTS.md。
+更新：2026-10-09（Asia/Shanghai）。此清单覆盖全部正式代码、测试、配置和维护文档。每个文件对应当前任务；未登记文件视为可疑。实验一以 TRAINING_PROTOCOL.md 为准，独立 Proxy A/B 以 proxy-training-protocol.md 为准，执行规则见 AGENTS.md。
 
 g4物化可复用本轮g1/g2/g3相同sample_id的确定性物理特征，先核对冻结80点target/mask完全相同，再按g4冻结manifest更新split/study_group；cache记录reused_feature_sources，不复用latent、统计量或模型checkpoint，避免重复路线计算。
+
+四组研究已完成训练、最终评价及分析；run/report.md、summary.json、main_table.csv和training_curves.png为正式产物。汇总只处理已保存逐行结果，增加同五条离线/闭环对照、窗口/分母/val loss曲线，不做新增模型前向。源码、协议与状态同步，后续研究需新批准合同。
 
 当前四组研究复用现有build_transfer_manifests、materialize_target_features、build_navigation_tasks、audit_navigation_routes、train_transfer、run_transfer_training和evaluate_navigation、summarize_navigation；新增four_groups配置，不新建源码文件/入口。core负责完整trajectory划分与0.1…8m未来站点；cache携带显式experiment_profile隔离新表示与旧Proxy；trainer仅该配置允许ANYmal域内训练，正式每5完整epoch验证，旧proxy_ab仍250updates且ANYmal禁训。run脚本协调同一UTC RUN_ID下真实数据→preflight→GPU smoke→两GPU分批四组→离线/闭环→旧实验1比较。正式说明复用TRAINING_PROTOCOL，run内说明是产物。
 
@@ -178,7 +180,7 @@ Proxy调用（真实CPU及正式GPU全链通过）：Dataset/cache物理history�
 | `tartan/research_score/scripts/materialize_target_features.py` | 唯一manifest到目标特征cache物化；复用TartanTargetDataset | 迁移数据/训练/导航 |
 | `tartan/research_score/scripts/run_transfer_evaluation.sh` | 唯一正式测试调度；加载navigation_best并消费冻结test任务 | 迁移数据/训练/导航 |
 | `tartan/research_score/scripts/run_transfer_training.sh` | legacy矩阵、Proxy及四组调度；同run恢复保留证据/冻结说明，按实际train+eval完成状态跳过并记录pending | 迁移数据/训练/导航 |
-| `tartan/research_score/scripts/summarize_navigation.py` | 合并正式训练/导航结果为主表；报告选中checkpoint验证SR | 迁移数据/训练/导航 |
+| `tartan/research_score/scripts/summarize_navigation.py` | legacy/Proxy及四组汇总；读取已完成指标/逐行结果生成同子集离线与闭环对照、旧实验1描述比较、简洁分析报告/训练曲线，保留run状态 | 结果报告 |
 | `tartan/research_score/scripts/train_transfer.py` | 唯一四方法target-update训练、SR导航验证选模/早停与checkpoint写出 | 迁移数据/训练/导航 |
 | `tartan/research_score/scripts/validate_transfer_manifests.py` | 冻结源审计、训练长度覆盖、完整episode隔离和80点mask校验 | 迁移数据/训练/导航 |
 | `tartan/research_score/tests/__init__.py` | 测试包导入边界 | 迁移数据/训练/导航 |
