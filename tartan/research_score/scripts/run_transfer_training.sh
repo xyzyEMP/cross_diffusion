@@ -8,6 +8,7 @@ if [[ ${PROFILE:-transfer_primary} == four_groups ]];then
  RUN_ID=${RUN_ID:?Use the saved explicit four-group RUN_ID}
  [[ "$RUN_ID" =~ ^[0-9]{8}T[0-9]{6}Z_[A-Za-z0-9_-]+$ ]] || exit 2
  RUN="$BASE/runs/$RUN_ID";CONFIG="$RUN/config.yaml"
+ if [[ -s "$RUN/status.json" ]] && "$PYTHON_BIN" -c 'import json,sys; raise SystemExit(0 if json.load(open(sys.argv[1])).get("status")=="COMPLETE" else 1)' "$RUN/status.json";then exit 0;fi
  mkdir -p "$RUN/logs"
  export OMP_NUM_THREADS=8 OPENBLAS_NUM_THREADS=8
  "$PYTHON_BIN" - "$RUN" "$PROJECT" <<'PYSETUP'

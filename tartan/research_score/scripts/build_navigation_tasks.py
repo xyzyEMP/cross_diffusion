@@ -36,7 +36,7 @@ def main():
 def build_proxy_tasks(a):
  from tartan.research_score.data.core import proxy_window,four_group_window
  from tartan.data.pose_utils import read_proxy_trajectories,load_proxy_se2
- import os,tempfile
+ from tartan.research_score.artifacts import publish_text
  if a.distance_m!=8. or a.anchor_stride!=10:raise ValueError('Proxy fixed 8m/stride10 config conflict')
  source=Path(a.input_manifest);data=source.parent
  trajectories={r['trajectory_key']:r for r in read_proxy_trajectories(data/'trajectories.jsonl')}
@@ -56,11 +56,7 @@ def build_proxy_tasks(a):
   counts[key]=segment
  out=Path(a.output);out.parent.mkdir(parents=True,exist_ok=True)
  if out.exists():raise FileExistsError(out)
- fd,tmp=tempfile.mkstemp(prefix='.'+out.name+'.',dir=out.parent)
- with os.fdopen(fd,'w') as h:
-  for r in rows:h.write(json.dumps(r,sort_keys=True)+'\n')
-  h.flush();os.fsync(h.fileno())
- os.replace(tmp,out)
+ publish_text(''.join(json.dumps(r,sort_keys=True)+'\n' for r in rows),out)
  print(json.dumps({'segments':len(rows),'counts':counts,'status':'PREPARED' if rows else 'BLOCKED_NO_VERIFIED_WINDOWS','output':str(out)}))
 
 if __name__=='__main__':main()

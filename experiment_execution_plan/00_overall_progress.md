@@ -4,7 +4,7 @@
 
 用户批准g1 ANYmal70/10/20、g2 Omni70/10/20、g3 Diff70/10/20、g4 Diff+Omni分别80/20→全部24条ANYmal；四组统一普通backbone无history/RMS，每5完整epoch验证。RUN_ID=`20261008T132918Z_four_groups`，DATA_ID为该ID分别加_g1…_g4，catalog来自已验收20261002T045353Z_proxy_cpu。来源、表示、预算、评价及最新原实验1区别见TRAINING_PROTOCOL开头。
 
-本机实现与CPU验证已完成：72 passed、1 skipped（本机无GPU，跳过现有CUDA source regression）；5epoch完整遍历/恢复边界、70/10/20和80/20完整trajectory隔离、0.1…8m完整80站点、原proxy ANYmal禁训、缓存表示及旧恢复接口覆盖。shell语法与模块编译通过。未把测试通过当作实验完成。服务器已恢复，2张空闲L20；正在部署并物化真实数据，真实preflight/GPU smoke/正式训练及最终评价尚待实际产物验证。
+本机实现与CPU验证已完成：72 passed、1 skipped（本机无GPU，跳过现有CUDA source regression）；5epoch完整遍历/恢复边界、70/10/20和80/20完整trajectory隔离、0.1…8m完整80站点、原proxy ANYmal禁训、缓存表示及旧恢复接口覆盖。shell语法与模块编译通过。未把测试通过当作实验完成。服务器已恢复，2张空闲L20；真实cache/preflight四组全部PASS，g1/g2四更新AMP smoke通过并正式训练中；最终训练/测试和报告尚未完成。
 
 说明位置：正式源码TRAINING_PROTOCOL.md；主run/experiment_description.md；历史归档archive/experiment1/{README.md,code/,results/,stage_summary_20260929.md,source_record.json}。归档仅最新原实验1入口/依赖43个文件和保留SPL-first结果，原目录不删；用户明确授权输出盘归档例外。g1完成后报告与旧100%指标差值；g4同时导出g1同5条测试子集，无额外模型前向。
 
@@ -380,3 +380,18 @@ run路径`/tj-share/cross_diffusion_workdir/runs/20261002T045353Z_proxy_cpu`。c
 
 
 2026-10-08最新实验1对照基准复核：以用户提供2026-09-29阶段总结对应的finetune_navigation_selection_earlystop_v1为准，保留run results/transfer/20261001T154600Z_retained_spl_seed11。实际100% metrics：2720 updates/85 epochs，best1440 updates/45 epochs；val宏SR70.5177%、SPL65.0646%，35任务×seed11/23/47；按SPL优先选模，LR每10epoch按val loss(min)调整。当前无历史A为5000/best250，SR选模，LR按SR(max)，不能将差距仅归为平台数据。真实target_train_features及d029_extended缓存均2048，完整80点692、平均有效61.5493；真实最终manifest raw_points80、timestamps至8秒，旧先截时间再空间重采样的区别成立。extended只扩充预算档位，没有延长轨迹。用最终manifest首条真实样本重建旧direct-grid特征，lanes/route_lanes/target/mask与缓存完全一致。CPU source evidence确认同源occupancy为camera-local、0.2m体素、XY bounds[-25,25]；旧直接按0.5m索引解释，尺度假设不一致。新101×101@0.5m是显式转换后BEV，保留约50m尺度；不能将旧250格解释为真实125m视野。NED→NWU仅坐标约定，NED本身不是错误；当前ego-local闭环用于对齐训练，但旧fixed-frame并非已证实错误。起点纳入是表示合同选择，未证明旧下一帧错误。平台/split改变为用户目标，不作为待修复问题。未改模型、缓存、原始数据或训练结果，未启动新训练；旧高分受上述几何假设限制，未量化其影响。
+
+2026-10-08真实预检后的最小接口修正：four_groups闭环以预测轨迹在实际执行站点的yaw更新观测参考系，允许侧移朝向与位移方向不同；proxy_ab及旧实验1保留原位移heading行为。新g1四更新AMP smoke已通过（工程产物，不作性能结果）；smoke验证时钟明确为updates2/4，正式每5完整epoch。新修正由数学侧移/转向控制器测试覆盖，不需要机体外参猜测、不改loss或监督。
+
+当前四组实际冻结窗口与导航任务（2026-10-08 CPU完成节点）：
+
+| 组 | train/val/test窗口 | val/test导航任务（每任务3个推理seed） |
+|---|---|---|
+| g1 | 2007/229/590 | 19/59 |
+| g2 | 2032/301/625 | 95/160 |
+| g3 | 1328/152/270 | 45/66 |
+| g4 | 4255/453/2826 | 140/296 |
+
+`cpu_report.json`记录四组PASS和原始碰撞/起点/连通计数，计数存在重叠，不能相加当作排除数。共享盘g4新清单读到过陈旧页，一次fadvise后正常140条，生产端已复用artifact原子发布/刷新；同RUN_ID恢复，无重建cache，无删checkpoint。g4确定性特征已全部复用本轮前三组并逐点核对，split按自己的manifest更新；不是模型或训练统计共享。
+
+自动续接=`analyze-four-group-diffusion-planner-study`，正常运行静默，故障最小修复同RUN_ID，全部完成后分析g1对旧实验1以及部分重合测试轨迹、g4同g1五条子集，再更新本机/服务器文档并推送GitHub，报告完成后删除自动任务。当前不得重新启动活跃runner；必要恢复命令保持同一RUN_ID。

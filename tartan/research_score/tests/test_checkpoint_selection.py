@@ -128,3 +128,13 @@ def test_five_epoch_validation_uses_complete_pass_not_update_count():
     state['epoch']=6
     assert not train_transfer.validation_due(state,cfg,True)
     assert train_transfer.validation_due(state,cfg,False)
+
+
+def test_observation_heading_is_not_replaced_by_strafe_direction():
+    import numpy as np
+    from tartan.research_score.scripts.evaluate_navigation import controller_heading
+    # Mathematical controller check, never a saved training fixture.
+    sideways=np.column_stack((np.zeros(80),-np.arange(1,81)/10.,np.ones(80),np.zeros(80)))
+    assert controller_heading(sideways,1.)==0.
+    turning=np.column_stack((np.arange(1,81)/10.,np.zeros(80),np.zeros(80),np.ones(80)))
+    assert np.isclose(controller_heading(turning,1.),np.pi/2)

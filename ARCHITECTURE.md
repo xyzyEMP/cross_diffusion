@@ -211,3 +211,5 @@ Proxy调用（真实CPU及正式GPU全链通过）：Dataset/cache物理history�
 pair.run_pair_mining的--base-window-dir复用现有数据/共同frame门禁；materialize_target_features的--reuse-cache复用同normalizer/身份物理特征；CPU smoke优先验证新增native配对。GPU续接script与报告是run产物，不是平行源码入口。来源证据、批准记录、冻结输入、必要checkpoint及实际config/command/metrics保留；cleanup_record记录精确清理。当前协议和状态无重复历史节点；独立transfer_primary接口保留但不作为本轮入口。
 
 2026-10-08：原始backbone对照复用train_transfer.py的A-only --disable-history；默认历史A/B及原checkpoint配置保持兼容。evaluate_navigation.load_model从冻结cli选择是否启用历史再strict加载；无历史模型不可执行latent诊断。无新增源码文件。run内runner为实际命令编排产物，不是新训练入口。
+
+2026-10-08真实预检后的最小接口修正：four_groups闭环以预测轨迹在实际执行站点的yaw更新观测参考系，允许侧移朝向与位移方向不同；proxy_ab及旧实验1保留原位移heading行为。新g1四更新AMP smoke已通过（工程产物，不作性能结果）；smoke验证时钟明确为updates2/4，正式每5完整epoch。新修正由数学侧移/转向控制器测试覆盖，不需要机体外参猜测、不改loss或监督。

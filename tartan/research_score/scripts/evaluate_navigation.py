@@ -47,6 +47,15 @@ def controller_segment(pred,max_distance=1.0,step=.1):
  if not len(s):return np.zeros((1,2))
  return np.column_stack([np.interp(s,arc,p[:,0]),np.interp(s,arc,p[:,1])])
 
+def controller_heading(pred, distance):
+ """Interpolate predicted observation yaw at the executed spatial station."""
+ p=np.asarray(pred,float);xy=np.vstack(([0.,0.],p[:,:2]));angles=np.r_[0.,np.arctan2(p[:,3],p[:,2])]
+ arc=np.r_[0.,np.cumsum(np.linalg.norm(np.diff(xy,axis=0),axis=1))]
+ _,first=np.unique(arc,return_index=True)
+ angle=float(np.interp(distance,arc[first],np.unwrap(angles[first])))
+ return math.atan2(math.sin(angle),math.cos(angle))
+
+
 def load_model(method,checkpoint,args,device='cuda',profile='transfer_primary'):
  c=Config(args,None);c.device=device;base=Diffusion_Planner(c)
  z=torch.load(checkpoint,map_location='cpu',weights_only=False)
@@ -74,7 +83,8 @@ def rollout(record,c,model,wrapped,episode_index,max_replans=16,inference_seed=1
    elif wrapped:_,o=model(inp,torch.ones(1,dtype=torch.long,device=c.device),ABILITY_ANYMAL.to(c.device))
    else:_,o=model(inp)
   if str(c.device).startswith('cuda'):torch.cuda.synchronize()
-  lat.append(time.perf_counter()-t);seg=controller_segment(o['prediction'][0,0].float().cpu().numpy())
+  lat.append(time.perf_counter()-t);prediction=o['prediction'][0,0].float().cpu().numpy();seg=controller_segment(prediction)
+  predicted_yaw_delta=controller_heading(prediction,.1*len(seg)) if record.get('experiment_profile')=='four_groups' else None
   if proxy:seg=seg @ np.array([[math.cos(yaw),math.sin(yaw)],[-math.sin(yaw),math.cos(yaw)]])
   absolute=current[None]+seg;hit,idx=path_collision(absolute,blocked,start)
   if hit:
@@ -83,7 +93,7 @@ def rollout(record,c,model,wrapped,episode_index,max_replans=16,inference_seed=1
   travelled=float(np.linalg.norm(absolute[-1]-current)) if len(absolute) else 0.;stalled=stalled+1 if travelled<.05 else 0
   if len(absolute):
    delta=absolute[-1]-current;current=absolute[-1];executed.extend(absolute.tolist())
-   if np.linalg.norm(delta)>1e-4:yaw=math.atan2(delta[1],delta[0])
+   if np.linalg.norm(delta)>1e-4:yaw=(yaw+predicted_yaw_delta) if predicted_yaw_delta is not None else math.atan2(delta[1],delta[0])
   if np.linalg.norm(current-goal)<=.75:reason='success';break
   if stalled>=3:reason='stuck';break
  return finish(record,np.asarray(executed),goal,shortest,reason=='success',collision,reason,rep+1,float(np.mean(lat)) if lat else 0.)

@@ -17,7 +17,7 @@
 
 **验证与选模。** AdamW，lr=1e-4，weight_decay=1e-4，batch=64，clip=5，GPU AMP；四维去噪SSE/有效点。每5个完整epoch结束做一次完整validation loss和导航验证（第5/10/15…epoch），日志同时记录epoch与update；工程smoke按第2/4更新验证，不能作为正式结果。选模仍按validation trajectory-macro SR→SPL→低CR→progress→更早update，g4等权平均Diff/Omni；只使用本组val。共同预算仍最少5000、最多10000次更新，连续10次导航检查SR未提升早停，仅在验证节点触发；最大更新数可能截断最后epoch，不能把半个epoch写成完整epoch。LR按每次验证SR调整，mode=max/factor=.5/patience=2/min_lr=5e-6。此次用户更改的是验证频率，没有把选模、scheduler和预算恢复成旧实验1。
 
-**共同评价。** 使用各自`navigation_best.pt`；离线ADE/FDE和闭环SR/CR/SPL按trajectory宏平均，保存逐窗口/逐任务结果。每次规划使用当前朝向局部frame，预测转回任务坐标执行前1米、0.1米插值，最多16次replan，成功距离0.75米。圆形半径ANYmal=.35米、Diff/Omni=.5米为既定代理；控制器以实际位移方向更新heading，仍不直接执行预测yaw。D024连通失败统一安全停车，记route_failure、保留分母、不计collision；invalid-map统一剔除并单独列数。首次训练前检查真实val坐标往返、完整8米、未来监督不能改变地图/路线输入，并保存地图/路径叠图及记录路径碰撞计数；发现坐标错误应修复后续接，不筛任务或放宽阈值提高分数。
+**共同评价。** 使用各自`navigation_best.pt`；离线ADE/FDE和闭环SR/CR/SPL按trajectory宏平均，保存逐窗口/逐任务结果。每次规划使用当前朝向局部frame，预测转回任务坐标执行前1米、0.1米插值，最多16次replan，成功距离0.75米。圆形半径ANYmal=.35米、Diff/Omni=.5米为既定代理；本轮控制器以执行空间站点的预测yaw续接观测参考系；位移方向不再替代相机/姿态heading，允许侧移与朝向不同。旧实验1/Proxy控制器按位移方向更新heading，保留旧行为和结果。D024连通失败统一安全停车，记route_failure、保留分母、不计collision；invalid-map统一剔除并单独列数。首次训练前检查真实val坐标往返、完整8米、未来监督不能改变地图/路线输入，并保存地图/路径叠图及记录路径碰撞计数；发现坐标错误应修复后续接，不筛任务或放宽阈值提高分数。
 
 **与最新原实验1的区别及选择。** 对照必须使用2026-09-29总结对应的`finetune_navigation_selection_earlystop_v1`，实际保留结果为`results/transfer/20261001T154600Z_retained_spl_seed11`，而不是更早loss选模实验。
 
@@ -296,3 +296,5 @@ bash tartan/research_score/scripts/run_transfer_evaluation.sh
 - 严格跨形态因果解耦或反事实预测；
 - 真实机器人或物理可执行性；
 - 完全无 oracle 的自主导航结论。
+
+2026-10-08真实预检后的最小接口修正：four_groups闭环以预测轨迹在实际执行站点的yaw更新观测参考系，允许侧移朝向与位移方向不同；proxy_ab及旧实验1保留原位移heading行为。新g1四更新AMP smoke已通过（工程产物，不作性能结果）；smoke验证时钟明确为updates2/4，正式每5完整epoch。新修正由数学侧移/转向控制器测试覆盖，不需要机体外参猜测、不改loss或监督。
