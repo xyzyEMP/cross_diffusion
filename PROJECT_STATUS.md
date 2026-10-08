@@ -29,7 +29,7 @@ RUN_ID=`20261008T132918Z_four_groups`；状态`GPU_RUNNING`，服务器进程PID
 
 参考点是证据支持的前相机观测点，真实base外参未知；圆形footprint和路径执行仍是代理；本轮统一用预测yaw续接参考系，已修复位移方向替代观测heading的接口不一致。原occupancy直接把0.2米索引解释成0.5米，已核实2.5倍尺度假设差异；本轮按bounds/完整姿态显式转换，101×101@0.5米仍约50米范围。新旧高分不能等价因果比较。真实记录路径与碰撞代理可能冲突，预检记录并保留任务，不放宽阈值。单地图、单训练seed和少量独立validation trajectory仍限制结论。
 
-下一阶段：完成真实cache/preflight→各组4update AMP smoke→独立原始nuPlan正式训练→各组冻结test→g1原实验1比较/g4同5条子集→分析并同步文档/GitHub。当前run/status.json为实际状态依据，报告未完成前不标COMPLETE。已授权完整执行，不重跑旧A/B或旧消融。
+下一阶段：前两组正式训练/评价→后两组smoke/独立原始nuPlan正式训练/评价→g1原实验1比较/g4同5条子集→分析并同步文档/GitHub。当前run/status.json为实际状态依据，报告未完成前不标COMPLETE。已授权完整执行，不重跑旧A/B或旧消融。
 
 2026-10-08真实预检后的最小接口修正：four_groups闭环以预测轨迹在实际执行站点的yaw更新观测参考系，允许侧移朝向与位移方向不同；proxy_ab及旧实验1保留原位移heading行为。新g1四更新AMP smoke已通过（工程产物，不作性能结果）；smoke验证时钟明确为updates2/4，正式每5完整epoch。新修正由数学侧移/转向控制器测试覆盖，不需要机体外参猜测、不改loss或监督。
 

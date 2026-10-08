@@ -187,6 +187,7 @@ def proxy_train():
  ds=CachedTargetDataset(a.train_cache,c);vd=CachedTargetDataset(a.val_cache,c)
  if not len(ds) or not len(vd):raise ValueError('base train and val must be nonempty')
  for dataset,split in ((ds,'train'),(vd,'val')):
+  if (dataset.z.get('experiment_profile')=='four_groups')!=study:raise ValueError('cache experiment profile mismatch')
   for i in range(len(dataset)):
    meta=dataset[i][3]
    if meta['split']!=split or int(meta['platform_id']) not in ((1,2,3) if study else (2,3)):raise ValueError('base cache split/platform leak')
