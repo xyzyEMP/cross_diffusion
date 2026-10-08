@@ -69,7 +69,8 @@ def read_npz_traj(item):
   return rank,path,x,None
  except Exception as e:return rank,path,None,{"path":str(path),"reason":type(e).__name__,"detail":str(e)}
 def main():
- ap=argparse.ArgumentParser();ap.add_argument("--profile",default="transfer_primary",choices=("transfer_primary","proxy_ab"));ap.add_argument("--stage",choices=("trajectories","windows"));ap.add_argument("--trajectory-manifest");ap.add_argument("--resume",action="store_true");ap.add_argument("--config",required=True);ap.add_argument("--output",required=True);ap.add_argument("--run-id",required=True);a=ap.parse_args();cfg=yaml.safe_load(Path(a.config).read_text());
+ ap=argparse.ArgumentParser();ap.add_argument("--profile",default="transfer_primary",choices=("transfer_primary","proxy_ab","four_groups"));ap.add_argument("--group",choices=("g1","g2","g3","g4"));ap.add_argument("--stage",choices=("trajectories","windows"));ap.add_argument("--trajectory-manifest");ap.add_argument("--resume",action="store_true");ap.add_argument("--config",required=True);ap.add_argument("--output",required=True);ap.add_argument("--run-id",required=True);a=ap.parse_args();cfg=yaml.safe_load(Path(a.config).read_text());
+ if a.profile=="four_groups":return build_four_group(a,cfg)
  if a.profile=="proxy_ab":return build_proxy(a,cfg["proxy_ab"])
  assert cfg["protocol_revision"]==REV
  validate_output_name(a.run_id)
@@ -223,5 +224,40 @@ def build_proxy(a,cfg):
  publish(evidence_summary,out/'trajectory_summary.json',is_json=True)
  print(json.dumps(summary,indent=2))
  return
+
+def build_four_group(a,config):
+ from tartan.research_score.data.core import four_group_split,four_group_window
+ from tartan.data.pose_utils import read_proxy_trajectories,load_proxy_se2
+ from tartan.research_score.artifacts import publish,publish_text
+ from tartan.research_score.scripts.train_transfer import proxy_config
+ cfg=proxy_config(a.config,'four_groups');out=Path(a.output)/a.run_id;out.mkdir(parents=True,exist_ok=True)
+ validate_output_name(a.run_id)
+ if a.group not in cfg['groups']:raise ValueError('--group required')
+ def lines(path,rows):
+  text=''.join(json.dumps(r,sort_keys=True)+'\n' for r in rows)
+  if path.exists():
+   if a.resume and path.read_text()==text:return
+   raise FileExistsError(path)
+  publish_text(text,path)
+ if a.stage=='trajectories':
+  rows=four_group_split(read_proxy_trajectories(cfg['catalog']),a.group,cfg['split_seed'])
+  if any(not all(r['gates'].values()) for r in rows):raise ValueError('catalog evidence gate not passed')
+  lines(out/'trajectories.jsonl',rows)
+  publish(cfg,out/'config.json',True)
+  publish({'profile':'four_groups','group':a.group,'gates_passed':True,'counts':dict(Counter(r['split'] for r in rows)),'membership':{r['trajectory_key']:r['split'] for r in rows}},out/'trajectory_summary.json',True)
+  return
+ if a.stage!='windows':raise ValueError('explicit --stage required')
+ rows=read_proxy_trajectories(out/'trajectories.jsonl')
+ if json.loads((out/'config.json').read_text())!=cfg:raise ValueError('frozen config conflict')
+ windows={k:[] for k in ('train','val','test')};rejected=[]
+ for row in rows:
+  se2=load_proxy_se2(row)
+  for anchor in range(20,len(se2)-1,10):
+   try:windows[row['split']].append(four_group_window(row,se2,anchor,out/'trajectories.jsonl'))
+   except (ValueError,FileNotFoundError) as e:rejected.append({'trajectory_key':row['trajectory_key'],'anchor':anchor,'reason':str(e)})
+ uncovered=[r['trajectory_key'] for r in rows if not any(w['trajectory_key']==r['trajectory_key'] for w in windows[r['split']])]
+ for split,name in (('train','base_train'),('val','base_val'),('test','test')):lines(out/(name+'.jsonl'),windows[split])
+ publish({'counts':{k:len(v) for k,v in windows.items()},'rejected':rejected,'uncovered_trajectories':uncovered,'status':'PASS' if not uncovered and all(windows.values()) else 'BLOCKED_COVERAGE'},out/'window_summary.json',True)
+ if uncovered or not all(windows.values()):raise ValueError('incomplete four-group data coverage')
 
 if __name__=="__main__":main()

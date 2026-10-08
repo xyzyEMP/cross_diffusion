@@ -9,7 +9,7 @@ def interp_goal(local,distance):
  return np.array([np.interp(distance,s,local[:,0]),np.interp(distance,s,local[:,1])],np.float32)
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--profile',default='transfer_primary',choices=('transfer_primary','proxy_ab'));p.add_argument('--input-manifest',required=True);p.add_argument('--output',required=True);p.add_argument('--distance-m',type=float,default=8.);p.add_argument('--anchor-stride',type=int,default=10);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--future-stations',action='store_true');p.add_argument('--profile',default='transfer_primary',choices=('transfer_primary','proxy_ab'));p.add_argument('--input-manifest',required=True);p.add_argument('--output',required=True);p.add_argument('--distance-m',type=float,default=8.);p.add_argument('--anchor-stride',type=int,default=10);a=p.parse_args()
  if a.profile=='proxy_ab':return build_proxy_tasks(a)
  by={}
  for line in Path(a.input_manifest).open():
@@ -34,7 +34,7 @@ def main():
  for r in rows:counts[r['episode_id']]=counts.get(r['episode_id'],0)+1
  print(json.dumps({'segments':len(rows),'episodes':len(counts),'counts':counts,'output':str(out)},indent=2))
 def build_proxy_tasks(a):
- from tartan.research_score.data.core import proxy_window
+ from tartan.research_score.data.core import proxy_window,four_group_window
  from tartan.data.pose_utils import read_proxy_trajectories,load_proxy_se2
  import os,tempfile
  if a.distance_m!=8. or a.anchor_stride!=10:raise ValueError('Proxy fixed 8m/stride10 config conflict')
@@ -44,7 +44,10 @@ def build_proxy_tasks(a):
  for key in keys:
   tr=trajectories[key];se2=load_proxy_se2(tr);anchor=20;segment=0
   while anchor<len(se2)-1:
-   window=proxy_window(tr,se2,anchor,data/'trajectories.jsonl')
+   try:window=(four_group_window if a.future_stations else proxy_window)(tr,se2,anchor,data/'trajectories.jsonl')
+   except ValueError as e:
+    if str(e)=='incomplete_8m':break
+    raise
    if not all(window['trajectory']['valid_mask']):break
    end=window['trajectory']['source_end_frame']
    window.update(sample_id=f'{key}:nonoverlap8m:{segment:06d}',segment_index=segment,segment_end_index=end)

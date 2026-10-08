@@ -197,3 +197,22 @@ CPU_RUN_ID/DATA_ID=`20261002T045353Z_proxy_cpu`，全部CPU门禁通过；真实
 ## 用户授权的追加原因诊断
 
 原因诊断已完成（2026-10-03）：RUN_ID=`20261002T203425Z_proxy_diagnosis`，DATA_ID/CPU_RUN_ID=`20261002T045353Z_proxy_cpu`。 消融只在run配置改权重：no_swap令λswap=0；no_inv令λinv=0；no_sep令λsep=0；pair_only令三项辅助权重为0；base_only再令pair_denoising_weight=0，保留随机流/前向但不产生配对监督梯度。该字段默认1，原正式B行为不变。 五项均独立原始nuPlan初始化，使用相同冻结数据/seed及SR选模规则；no_swap/no_inv/no_sep/pair_only各5000更新、best250，base_only6000更新、best3500。validation SR分别24.25%/23.58%/24.92%/22.33%/26.92%，对照A30.25%/完整B26.83%。没有追加ANYmal模型前向。删除swap不改善；仅基础监督与完整B接近（差0.08pp）；仅配对去噪较低。B shared-only推理SR0%、ID-off21.08%，显示分支依赖；validation67个起点有效且初始连通任务中32条记录路径触发既定碰撞代理，说明模仿目标与安全评价存在冲突。报告/summary/status/configs/commands/logs及五项必要last/best checkpoint在`/tj-share/cross_diffusion_workdir/runs/20261002T203425Z_proxy_diagnosis`。状态COMPLETE，pending为空，无下一训练命令；完成项不重跑。只有故障恢复才在确认无进程后显式同RUN_ID执行continue.sh。研究限制与待修订项：2条独立val trajectory、单seed；还未修订目标/代理几何、控制器朝向及shared监督，不宣称ANYmal改进。
+
+2026-10-08原始backbone无历史对照完成：RUN_ID=`20261008T090250Z_proxy_a_no_history`，DATA_ID/CPU_RUN_ID=`20261002T045353Z_proxy_cpu`，状态COMPLETE，pending为空。复用原A冻结数据、normalizer、样本顺序/噪声随机流、seed11、原始nuPlan EMA独立初始化及训练/评价规则，仅--disable-history移除latent/RMS条件。真实4次AMP smoke、新旧checkpoint strict加载通过；正式5000更新、best250、基础曝光319408，原A样本顺序一致。全部24条ANYmal、3071离线窗口、296导航任务评价完成。
+
+| 指标 | 原A | 无历史A |
+|---|---:|---:|
+| validation SR | 30.25% | 32.1667% |
+| validation CR | 27.5833% | 25.6667% |
+| validation SPL | 29.7442% | 31.7978% |
+| ANYmal ADE/FDE(m) | 0.669893/1.501356 | 0.652690/1.450710 |
+| ANYmal SR/CR/SPL | 35.3451%/28.5444%/34.5613% | 36.7433%/28.4892%/35.7453% |
+
+无历史best验证Diff SR/CR/SPL=35/30/35%，Omni=29.3333/21.3333/28.5955%。best验证loss原A0.095083→无历史0.096257；末段训练loss0.040238→0.051718，末验证loss0.084650→0.097450。无历史第500验证SR25.6667%，原A1.3333%，早期骤降缓解，但最终best只改善1.9167pp；ANYmal改善1.3982pp。原A成功/碰撞/route_failure/timeout=103/84/102/7，无历史108/84/102/2。paired新增8个成功、丢失3个成功，净增加5个。历史分支可能影响早期优化，但单seed不能认定普遍有害，也不足以解释整体低成功率；没有接近旧ANYmal域内微调测试SR67.9783%（旧SPL优先/epoch协议及任务不同，非等价对照）。监督与碰撞代理冲突、简化朝向执行仍未修订；不追加未授权训练。
+
+正式产物位于`/tj-share/cross_diffusion_workdir/runs/20261008T090250Z_proxy_a_no_history`：config.yaml/experiment.json/command.sh/runner.py/status.json/summary.json/report.md、logs、smoke_acceptance.json、train/proxy_a_no_history/{last.pt,navigation_best.pt}及eval。必要权重全部保留。完成分析后删除heartbeat；无下一训练命令，不重跑。
+
+
+2026-10-08最新实验1对照基准复核：以用户提供2026-09-29阶段总结对应的finetune_navigation_selection_earlystop_v1为准，保留run results/transfer/20261001T154600Z_retained_spl_seed11。实际100% metrics：2720 updates/85 epochs，best1440 updates/45 epochs；val宏SR70.5177%、SPL65.0646%，35任务×seed11/23/47；按SPL优先选模，LR每10epoch按val loss(min)调整。当前无历史A为5000/best250，SR选模，LR按SR(max)，不能将差距仅归为平台数据。真实target_train_features及d029_extended缓存均2048，完整80点692、平均有效61.5493；真实最终manifest raw_points80、timestamps至8秒，旧先截时间再空间重采样的区别成立。extended只扩充预算档位，没有延长轨迹。用最终manifest首条真实样本重建旧direct-grid特征，lanes/route_lanes/target/mask与缓存完全一致。CPU source evidence确认同源occupancy为camera-local、0.2m体素、XY bounds[-25,25]；旧直接按0.5m索引解释，尺度假设不一致。新101×101@0.5m是显式转换后BEV，保留约50m尺度；不能将旧250格解释为真实125m视野。NED→NWU仅坐标约定，NED本身不是错误；当前ego-local闭环用于对齐训练，但旧fixed-frame并非已证实错误。起点纳入是表示合同选择，未证明旧下一帧错误。平台/split改变为用户目标，不作为待修复问题。未改模型、缓存、原始数据或训练结果，未启动新训练；旧高分受上述几何假设限制，未量化其影响。
+
+2026-10-08新增用户批准的four_groups研究采用普通无历史backbone及每5完整epoch验证，具体合同见TRAINING_PROTOCOL开头。g1允许ANYmal70/10/20训练，g4仍全部24条ANYmal最终test；此例外不修改已有proxy_ab边界、缓存或结果。当前新RUN_ID=20261008T132918Z_four_groups，真实运行状态见PROJECT_STATUS和run/status.json，不将既有A/B结果充作新四组完成。

@@ -38,7 +38,7 @@ paths:
   source_cache: ${SOURCE_CACHE}
   val_navigation_manifest: ${VAL_NAVIGATION_MANIFEST}
   test_navigation_manifest: ${TEST_NAVIGATION_MANIFEST}
-proxy_ab:
+proxy_ab: &proxy_defaults
   protocol_revision: proxy-ab-history-observed-reference
   reference_pose_policy: observed_lcam_front_reference
   reference_approval_record: /tj-share/cross_diffusion_workdir/runs/20261002T045353Z_proxy_cpu/reference_approval.json
@@ -162,3 +162,63 @@ proxy_ab:
   paths:
     output_root: /tj-share/cross_diffusion_workdir
     data_id: ${DATA_ID}
+
+# Common optimizer/budget/source settings are inherited; formal validation is epoch based.
+four_groups:
+  <<: *proxy_defaults
+  profile: four_groups
+  protocol_revision: four-groups-complete8m-epoch5
+  methods:
+  - proxy_a
+  disable_history: true
+  val_every_epochs: 5
+  inference_seeds:
+  - 11
+  - 23
+  - 47
+  groups:
+    g1:
+      train_platforms:
+      - anymal
+      test_platforms:
+      - anymal
+      fractions:
+      - 0.7
+      - 0.1
+      - 0.2
+    g2:
+      train_platforms:
+      - omni
+      test_platforms:
+      - omni
+      fractions:
+      - 0.7
+      - 0.1
+      - 0.2
+    g3:
+      train_platforms:
+      - diff
+      test_platforms:
+      - diff
+      fractions:
+      - 0.7
+      - 0.1
+      - 0.2
+    g4:
+      train_platforms:
+      - diff
+      - omni
+      test_platforms:
+      - anymal
+      fractions:
+      - 0.8
+      - 0.2
+      - 0.0
+  catalog: /tj-share/cross_diffusion_workdir/data/20261002T045353Z_proxy_cpu/trajectories.jsonl
+  split_seed: 20260911
+  trajectory:
+    length_m: 8.0
+    points: 80
+    arc_metric: xy
+    representation_policy: future-xy-8m-80-stations-0.1-to-8
+  val_every: 2

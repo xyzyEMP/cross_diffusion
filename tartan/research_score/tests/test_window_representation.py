@@ -36,3 +36,14 @@ def test_proxy_history_body_velocity_and_unknown_time_masks():
     unknown=proxy_history(se2,20,None)
     assert not any(unknown['history_dt_mask']) and not any(unknown['motion_mask'])
     assert unknown['motion_rms']==[0.,0.,0.]
+
+
+def test_complete_8m_future_stations_exclude_current_and_reject_short_suffix():
+    import pytest
+    from tartan.research_score.data.core import resample_future_8m
+    values=resample_future_8m(np.array([[0.,0.,0.],[0.,0.,1.],[4.,0.,0.],[9.,0.,0.]]))
+    assert np.allclose(values[:,0],np.arange(1,81)/10.)
+    assert np.allclose(values[:,1],0.) and np.allclose(values[:,2],1.)
+    assert values.shape==(80,4)
+    with pytest.raises(ValueError,match='incomplete_8m'):
+        resample_future_8m(np.array([[0.,0.,0.],[7.9,0.,0.]]))

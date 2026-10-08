@@ -49,8 +49,10 @@ def controller_segment(pred,max_distance=1.0,step=.1):
 
 def load_model(method,checkpoint,args,device='cuda',profile='transfer_primary'):
  c=Config(args,None);c.device=device;base=Diffusion_Planner(c)
- if profile=='proxy_ab':base.encoder.encoder.enable_proxy_history()
- wrapped=method in {'pretrain_adapter','emb_cond_diffusion','proxy_b'};m=ScoreDecompositionPlanner(base,proxy=True).to(device) if profile=='proxy_ab' and wrapped else (ScoreDecompositionPlanner(base).to(device) if wrapped else base.to(device));z=torch.load(checkpoint,map_location='cpu',weights_only=False);state=z.get('ema_state_dict',z.get('model',z));state={k.removeprefix('module.'):v for k,v in state.items()};m.load_state_dict(state,strict=True);m.eval();return c,m,wrapped
+ z=torch.load(checkpoint,map_location='cpu',weights_only=False)
+ disable_history=z.get('config',{}).get('cli',{}).get('disable_history',False)
+ if profile=='proxy_ab' and not disable_history:base.encoder.encoder.enable_proxy_history()
+ wrapped=method in {'pretrain_adapter','emb_cond_diffusion','proxy_b'};m=ScoreDecompositionPlanner(base,proxy=True).to(device) if profile=='proxy_ab' and wrapped else (ScoreDecompositionPlanner(base).to(device) if wrapped else base.to(device));state=z.get('ema_state_dict',z.get('model',z));state={k.removeprefix('module.'):v for k,v in state.items()};m.load_state_dict(state,strict=True);m.eval();return c,m,wrapped
 
 def rollout(record,c,model,wrapped,episode_index,max_replans=16,inference_seed=10000):
  sparse=load_occupancy_record(record);goal=np.asarray(record['fixed_goal']['xy_local'],float);prepared=prepare_episode(record,record.get('embodiment','anymal'));_,blocked,start,_,cells,shortest,_,invalid=prepared
@@ -114,12 +116,12 @@ def offline_metrics(prediction, target, mask, normalized_prediction=None, normal
 def proxy_evaluate():
  from tartan.research_score.training.cached_target_dataset import CachedTargetDataset
  from torch.utils.data import default_collate
- p=argparse.ArgumentParser();p.add_argument('--profile',choices=['proxy_ab'],required=True);p.add_argument('--config',required=True);p.add_argument('--method',choices=['proxy_a','proxy_b'],required=True)
+ p=argparse.ArgumentParser();p.add_argument('--profile',choices=['proxy_ab','four_groups'],required=True);p.add_argument('--config',required=True);p.add_argument('--method',choices=['proxy_a','proxy_b'],required=True)
  for k in ('checkpoint','args','test-manifest','output'):p.add_argument('--'+k,required=True)
  p.add_argument('--diagnostic-train-cache');p.add_argument('--diagnostic-val-cache');p.add_argument('--device',choices=['cpu','cuda'],required=True);p.add_argument('--evaluation-kind',choices=['offline','navigation'],required=True);p.add_argument('--test-cache');a=p.parse_args()
  import yaml
  from tartan.research_score.preflight.cli import _resolve
- cfg=_resolve(yaml.safe_load(Path(a.config).read_text())['proxy_ab'])
+ cfg=_resolve(yaml.safe_load(Path(a.config).read_text())[a.profile]);study=a.profile=='four_groups'
  if a.device!='cuda' or not torch.cuda.is_available():raise RuntimeError('final ANYmal model evaluation requires the authorized GPU phase')
  checkpoint=Path(a.checkpoint)
  if checkpoint.name!='navigation_best.pt':raise ValueError('final evaluation requires navigation_best.pt')
@@ -129,27 +131,29 @@ def proxy_evaluate():
  train_metrics=json.loads((checkpoint.parent/'metrics.json').read_text())
  if train_metrics['status']!='complete' or not train_metrics['eligible_for_formal_result']:raise ValueError('training must complete before final test')
  data=Path(cfg['paths']['output_root'])/'data'/cfg['paths']['data_id']
- expected_manifest=data/('anymal_test.jsonl' if a.evaluation_kind=='offline' else 'navigation_anymal_test.jsonl')
+ expected_manifest=data/(('test.jsonl' if a.evaluation_kind=='offline' else 'navigation_test.jsonl') if study else ('anymal_test.jsonl' if a.evaluation_kind=='offline' else 'navigation_anymal_test.jsonl'))
  if Path(a.test_manifest).resolve()!=expected_manifest.resolve():raise ValueError('test manifest does not belong to frozen DATA_ID')
  if a.evaluation_kind=='offline':
   z=torch.load(a.test_cache,map_location='cpu',weights_only=False)
   manifest_ids=[json.loads(line)['sample_id'] for line in expected_manifest.open() if line.strip()]
   if set(z['sample_ids'])!=set(manifest_ids) or len(z['sample_ids'])!=len(manifest_ids):raise ValueError('test cache/manifest IDs mismatch')
- out=Path(a.output);out.mkdir(parents=True,exist_ok=False);publish({'cli':vars(a),'proxy_ab':cfg,'selected_update':saved['target_updates']},out/'config.json',True)
+ out=Path(a.output);out.mkdir(parents=True,exist_ok=study);evaluation_config={'cli':vars(a),'proxy_ab':cfg,'selected_update':saved['target_updates']}
+ if (out/'config.json').exists() and json.loads((out/'config.json').read_text())!=evaluation_config:raise ValueError('existing evaluation config differs')
+ publish(evaluation_config,out/'config.json',True)
  c,m,w=load_model(a.method,a.checkpoint,a.args,a.device,'proxy_ab')
  if a.evaluation_kind=='navigation':
   records=load_segments(a.test_manifest)
   if any(r['split']!='test' for r in records):raise ValueError('final evaluation requires test-only manifest')
-  rows=[rollout(r,c,m,w,i) for i,r in enumerate(records)];pd.DataFrame(rows).to_csv(out/'per_segment.csv',index=False)
+  rows=[{**rollout(r,c,m,w,i,inference_seed=seed),'inference_seed':seed} for seed in (cfg['inference_seeds'] if study else [10000]) for i,r in enumerate(records)];pd.DataFrame(rows).to_csv(out/'per_segment.csv',index=False)
   valid=[r for r in rows if r['included_in_denominator']];summary=aggregate(valid);summary['episode_macro']=episode_macro(valid)
   summary.update({'status':'complete' if valid else 'NO_VALID_TASKS','segments_selected':len(rows),'included_segments':len(valid),'excluded_invalid_map_ids':[r['sample_id'] for r in rows if not r['included_in_denominator']],'raw_trajectory_coverage':sorted({r['trajectory_key'] for r in rows})})
   pd.DataFrame([{'trajectory_key':k,**v} for k,v in summary['episode_macro']['per_episode'].items()]).to_csv(out/'per_trajectory.csv',index=False)
  else:
   if not a.test_cache:raise ValueError('offline requires --test-cache')
   ds=CachedTargetDataset(a.test_cache,c);rows=[];g=torch.Generator().manual_seed(20260914)
-  for i in sorted(range(len(ds)),key=lambda i:ds[i][3]['sample_id']):
+  for seed,i in [(seed,i) for seed in (cfg['inference_seeds'] if study else [10000]) for i in sorted(range(len(ds)),key=lambda i:ds[i][3]['sample_id'])]:
    x,y,mask,meta=default_collate([ds[i]])
-   if meta['split'][0]!='test' or int(meta['platform_id'][0])!=1:raise ValueError('final offline requires ANYmal test')
+   if meta['split'][0]!='test' or int(meta['platform_id'][0]) not in ((1,2,3) if study else (1,)):raise ValueError('final offline requires ANYmal test')
    x={k:v.to(a.device) for k,v in x.items()};x=c.observation_normalizer(x);raw=torch.zeros(1,11,80,4,device=a.device);raw[:,0]=y.to(a.device);target=c.state_normalizer(raw)
    t=(torch.rand(1,generator=g)*.999+.001).to(a.device);eps=torch.randn(target.shape,generator=g).to(a.device);mean,std=(m.backbone if w else m).sde.marginal_prob(target,t)
    mean[:,1:]=0;eps[:,1:]=0
@@ -157,9 +161,9 @@ def proxy_evaluate():
    noisy={**x,'sampled_trajectories':torch.cat([cur,mean+std.reshape(-1,1,1,1)*eps],2),'diffusion_time':t}
    with torch.no_grad():
     _,den=m(noisy,meta['platform_id'].to(a.device),id_mask=torch.zeros(1,device=a.device)) if w else m(noisy)
-    torch.manual_seed(10000+len(rows));_,generated=m(x,meta['platform_id'].to(a.device),id_mask=torch.zeros(1,device=a.device)) if w else m(x)
+    torch.manual_seed(seed+i if study else 10000+len(rows));_,generated=m(x,meta['platform_id'].to(a.device),id_mask=torch.zeros(1,device=a.device)) if w else m(x)
    metrics=offline_metrics(generated['prediction'][0,0].cpu(),y[0],mask[0],den['score'][0,0,1:].cpu(),target[0,0].cpu())
-   rows.append({'sample_id':meta['sample_id'][0],'trajectory_key':meta['trajectory_key'][0],**metrics})
+   rows.append({'inference_seed':seed,'sample_id':meta['sample_id'][0],'trajectory_key':meta['trajectory_key'][0],**metrics})
   frame=pd.DataFrame(rows);frame['mse']=frame.sse/frame.valid_count;frame.to_csv(out/'per_window.csv',index=False)
   trajectories=frame.groupby('trajectory_key')[['mse','ade','fde']].mean();trajectories.to_csv(out/'per_trajectory.csv')
   declared={json.loads(line)['trajectory_key'] for line in Path(a.test_manifest).open() if line.strip()}
@@ -180,10 +184,11 @@ def proxy_diagnostics(model,c,train_path,val_path,device,wrapped):
  from tartan.research_score.training.cached_target_dataset import CachedTargetDataset
  from torch.utils.data import default_collate
  encoder=(model.backbone if wrapped else model).encoder.encoder
+ if not hasattr(encoder,'proxy_history'):raise ValueError('latent diagnostics require history-enabled model')
  collected=[];ids=[];geometry={'shared':[],'total':[]};g=torch.Generator().manual_seed(20260914)
  for path,split in ((train_path,'train'),(val_path,'val')):
   ds=CachedTargetDataset(path,c);z=[];rms=[];masks=[];sample_ids=[]
-  for i in sorted(range(len(ds)),key=lambda i:ds[i][3]['sample_id']):
+  for seed,i in [(seed,i) for seed in (cfg['inference_seeds'] if study else [10000]) for i in sorted(range(len(ds)),key=lambda i:ds[i][3]['sample_id'])]:
    x,y,mask,meta=default_collate([ds[i]])
    if meta['split'][0]!=split or int(meta['platform_id'][0]) not in (2,3):raise ValueError('diagnostics forbid ANYmal/test')
    x={k:v.to(device) for k,v in x.items()}

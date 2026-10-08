@@ -167,3 +167,46 @@ def torch_transform_trajectory(value, transform, delta=False):
     if not delta:xy=xy+t[:,:2,2].unsqueeze(1)
     direction=torch.einsum('bij,bnj->bni',r,value[...,2:])
     return torch.cat((xy,direction),dim=-1)
+
+
+def four_group_split(rows, group, seed=20260911):
+    """Freeze full trajectories; tiny platforms keep nonempty validation/test."""
+    import random
+    spec = {'g1':('anymal',), 'g2':('omni',), 'g3':('diff',), 'g4':('diff','omni')}
+    if group not in spec: raise ValueError('unknown four-group task')
+    assigned=[]
+    for platform in spec[group]:
+        items=sorted((dict(r) for r in rows if r['embodiment']==platform),key=lambda r:r['trajectory_key'])
+        if len(items)<(2 if group=='g4' else 3):raise ValueError('insufficient complete trajectories')
+        order=list(range(len(items)));random.Random(seed).shuffle(order)
+        nv=max(1,round((.2 if group=='g4' else .1)*len(items)))
+        nt=0 if group=='g4' else max(1,round(.2*len(items)))
+        val=set(order[:nv]);test=set(order[nv:nv+nt])
+        for i,r in enumerate(items):
+            r.update(split='val' if i in val else ('test' if i in test else 'train'),split_seed=seed,split_algorithm='four-group-per-platform-sorted-python-random-shuffle',study_group=group)
+            assigned.append(r)
+    if group=='g4':
+        for r in rows:
+            if r['embodiment']=='anymal':assigned.append({**r,'split':'test','split_seed':seed,'split_algorithm':'four-group-all-anymal-final-test','study_group':group})
+    assert_no_split_leak(assigned,keys=('trajectory_key',))
+    return sorted(assigned,key=lambda r:r['trajectory_key'])
+
+
+def resample_future_8m(local):
+    """80 future stations, excluding the separately supplied current-state token."""
+    distance=np.r_[0.,np.cumsum(np.linalg.norm(np.diff(local[:,:2],axis=0),axis=1))]
+    if distance[-1]<8.-1e-6:raise ValueError('incomplete_8m')
+    _,first=np.unique(distance,return_index=True);x=np.asarray(local)[first];d=distance[first]
+    stations=np.arange(1,81,dtype=float)/10.;yaw=np.interp(stations,d,np.unwrap(x[:,2]))
+    return np.column_stack((np.interp(stations,d,x[:,0]),np.interp(stations,d,x[:,1]),np.cos(yaw),np.sin(yaw))).astype(np.float32)
+
+
+def four_group_window(row,se2,anchor,manifest_path):
+    from tartan.data.pose_utils import to_local_se2
+    window=proxy_window(row,se2,anchor,manifest_path)
+    if window['trajectory']['measured_arc_m']<8.-1e-6:raise ValueError('incomplete_8m')
+    end=window['trajectory']['source_end_frame']
+    window['trajectory'].update(fixed_arc_length_80=resample_future_8m(to_local_se2(se2[anchor:end+1],se2[anchor])).tolist(),valid_mask=[True]*80,stations_m=(np.arange(1,81)/10.).tolist())
+    window['provenance']['representation_policy']='future-xy-8m-80-stations-0.1-to-8'
+    window.update(study_group=row['study_group'],experiment_profile='four_groups',branch='moving_planning')
+    return window

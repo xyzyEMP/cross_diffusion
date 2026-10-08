@@ -70,3 +70,15 @@ def test_proxy_manifest_validator_blocks_missing_evidence_and_split_tampering():
     anymal['split'] = 'train'
     checks = proxy_checks(frozen, empty)
     assert not next(c for c in checks['checks'] if c['name']=='frozen_full_trajectory_split')['passed']
+
+
+def test_four_groups_freeze_complete_trajectories_and_keep_proxy_isolation():
+    from collections import Counter
+    from tartan.research_score.data.core import four_group_split,proxy_split
+    rows=[{'trajectory_key':f'm/{robot}/{i:02d}', 'embodiment':robot} for robot,n in [('anymal',24),('diff',5),('omni',6)] for i in range(n)]
+    for group,counts in [('g1',{'train':17,'val':2,'test':5}),('g2',{'train':4,'val':1,'test':1}),('g3',{'train':3,'val':1,'test':1}),('g4',{'train':9,'val':2,'test':24})]:
+        frozen=four_group_split(rows,group)
+        assert Counter(r['split'] for r in frozen)==counts
+        assert frozen==four_group_split(list(reversed(rows)),group)
+        assert len({r['trajectory_key'] for r in frozen})==len(frozen)
+    assert all(r['split']=='test' for r in proxy_split(rows) if r['embodiment']=='anymal')

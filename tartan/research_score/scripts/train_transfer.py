@@ -121,18 +121,18 @@ def restore_rng(state,generators):
  for k,g in generators.items():g.set_state(state['streams'][k])
 
 
-def proxy_config(path):
+def proxy_config(path,profile="proxy_ab"):
  import yaml
  from tartan.research_score.preflight.cli import _resolve
- cfg=_resolve(yaml.safe_load(Path(path).read_text())['proxy_ab'])
+ cfg=_resolve(yaml.safe_load(Path(path).read_text())[profile])
  if cfg['seed']!=11 or cfg['trajectory']['length_m']!=8 or cfg['trajectory']['points']!=80:raise ValueError('conflicting Proxy frozen settings')
  return cfg
 
 
-def proxy_forward(model,c,batch,generator,id_generator,wrapped,device,shared_noise=None):
+def proxy_forward(model,c,batch,generator,id_generator,wrapped,device,shared_noise=None,allowed_platforms=(2,3)):
  from tartan.research_score.training.losses import proxy_masked_mse
  x,y,mask,meta=batch;x=c.observation_normalizer({k:v.to(device) for k,v in x.items()});y=y.to(device);mask=mask.to(device);n=len(y)
- if any(s not in ('train','val') for s in meta['split']) or any(int(v) not in (2,3) for v in meta['platform_id']):raise ValueError('ANYmal/test is forbidden in Proxy training')
+ if any(s not in ('train','val') for s in meta['split']) or any(int(v) not in allowed_platforms for v in meta['platform_id']):raise ValueError('ANYmal/test is forbidden in Proxy training')
  raw=torch.zeros(n,11,80,4,device=device);raw[:,0]=y;target=c.state_normalizer(raw)
  if shared_noise is None:t=torch.rand(n,generator=generator)*.999+.001;noise=torch.randn(raw.shape,generator=generator)
  else:t,noise=shared_noise
@@ -148,25 +148,39 @@ def proxy_forward(model,c,batch,generator,id_generator,wrapped,device,shared_noi
  return loss,out,target[:,0],mask,(t.cpu(),noise),meta
 
 
+def validation_due(state, cfg, epoch_clock=False):
+ """Run only after a full fifth epoch; a resumed partial epoch is not a check."""
+ if epoch_clock:
+  return state['cursor']==len(state['permutation']) and state['epoch']%cfg['val_every_epochs']==0
+ return state['update']>=state['next_val']
+
+
 def proxy_train():
  from torch.utils.data import default_collate
  from tartan.research_score.training.cached_target_dataset import CachedPairDataset
  from tartan.research_score.training.losses import proxy_pair_losses
- p=argparse.ArgumentParser();p.add_argument('--profile',choices=['proxy_ab'],required=True);p.add_argument('--config',required=True);p.add_argument('--method',choices=['proxy_a','proxy_b'],required=True)
+ p=argparse.ArgumentParser();p.add_argument('--profile',choices=['proxy_ab','four_groups'],required=True);p.add_argument('--config',required=True);p.add_argument('--method',choices=['proxy_a','proxy_b'],required=True)
  for key in ('train-cache','val-cache','val-navigation-manifest','args','checkpoint','output'):p.add_argument('--'+key,required=True)
  for key in ('pair-manifest','pair-cache','pair-val-manifest','pair-val-cache','resume'):p.add_argument('--'+key)
- p.add_argument('--stop-after',type=int);p.add_argument('--seed',type=int,default=11);p.add_argument('--device',choices=['cpu','cuda'],required=True);p.add_argument('--smoke',choices=['none','cpu','gpu'],default='none');p.add_argument('--amp',action='store_true');a=p.parse_args();cfg=proxy_config(a.config)
+ p.add_argument('--disable-history',action='store_true');p.add_argument('--stop-after',type=int);p.add_argument('--seed',type=int,default=11);p.add_argument('--device',choices=['cpu','cuda'],required=True);p.add_argument('--smoke',choices=['none','cpu','gpu'],default='none');p.add_argument('--amp',action='store_true');a=p.parse_args();cfg=proxy_config(a.config,a.profile)
+ study=a.profile=="four_groups"
+ if study and (a.method!="proxy_a" or not a.disable_history):raise ValueError("four groups require plain no-history backbone")
+ from functools import partial
+ forward=partial(proxy_forward,allowed_platforms=(1,2,3) if study else (2,3))
  if a.seed!=cfg['seed']:raise ValueError('Proxy seed must be 11')
  if a.device=='cpu' and (a.smoke!='cpu' or a.amp):raise ValueError('CPU is engineering smoke only, AMP forbidden')
  if a.device=='cuda' and not torch.cuda.is_available():raise RuntimeError('GPU_PENDING')
  if a.device=='cuda' and not a.amp:raise ValueError('GPU Proxy phase requires approved AMP')
- wrapped=a.method=='proxy_b';pairs_args=(a.pair_manifest,a.pair_cache,a.pair_val_manifest,a.pair_val_cache)
+ wrapped=a.method=='proxy_b'
+ if wrapped and a.disable_history:raise ValueError('history ablation is A-only')
+ pairs_args=(a.pair_manifest,a.pair_cache,a.pair_val_manifest,a.pair_val_cache)
  if wrapped and not all(pairs_args):raise ValueError('B requires all frozen pair inputs')
  if not wrapped and any(pairs_args):raise ValueError('A forbids pair inputs')
  out=Path(a.output);out.mkdir(parents=True,exist_ok=True)
  if any(out.glob('*.pt')) and not a.resume:raise ValueError('existing weights require explicit same-run resume')
  if a.resume and Path(a.resume).resolve()!= (out/'last.pt').resolve():raise ValueError('resume must use this output last.pt')
  frozen={'cli':{k:v for k,v in vars(a).items() if k not in ('resume','stop_after')},'proxy_ab':cfg,'purpose':cfg.get(a.smoke+'_smoke',{}).get('purpose','formal'),'eligible_for_formal_result':a.smoke=='none'}
+ if not a.disable_history:frozen['cli'].pop('disable_history',None)
  if (out/'config.json').exists() and json.loads((out/'config.json').read_text())!=frozen:raise ValueError('run config differs; no implicit restart')
  publish(frozen,out/'config.json',True);(out/'command.sh').write_text(shlex.join([sys.executable,'-m',__spec__.name,*sys.argv[1:]])+'\n')
  c=Config(a.args,None);c.device=a.device
@@ -175,7 +189,7 @@ def proxy_train():
  for dataset,split in ((ds,'train'),(vd,'val')):
   for i in range(len(dataset)):
    meta=dataset[i][3]
-   if meta['split']!=split or int(meta['platform_id']) not in (2,3):raise ValueError('base cache split/platform leak')
+   if meta['split']!=split or int(meta['platform_id']) not in ((1,2,3) if study else (2,3)):raise ValueError('base cache split/platform leak')
  pairs=CachedPairDataset(a.pair_manifest,a.pair_cache,c,split='train') if wrapped else None
  valpairs=CachedPairDataset(a.pair_val_manifest,a.pair_val_cache,c,split='val') if wrapped else None
  if wrapped and not len(pairs):raise RuntimeError('BLOCKED_NO_TRAIN_PAIR')
@@ -193,12 +207,13 @@ def proxy_train():
  torch.manual_seed(11);random.seed(11);np.random.seed(11);base=Diffusion_Planner(c)
  if not a.resume:
   selected_key=load_ckpt(base,a.checkpoint);publish({'original_source':a.checkpoint,'provenance_record':init['provenance_record'],'selected_state_key':selected_key,'strict_load':True,'new_optimizer':True},out/'source_initialization.json',True)
- base.encoder.encoder.enable_proxy_history(seed=11);model=ScoreDecompositionPlanner(base,proxy=True,seed=11) if wrapped else base;model.to(a.device)
+ if not a.disable_history:base.encoder.encoder.enable_proxy_history(seed=11)
+ model=ScoreDecompositionPlanner(base,proxy=True,seed=11) if wrapped else base;model.to(a.device)
  opt=torch.optim.AdamW(model.parameters(),lr=cfg['learning_rate'],weight_decay=cfg['weight_decay']);scaler=torch.cuda.amp.GradScaler(enabled=a.amp);scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(opt,**cfg['scheduler'])
  streams={k:torch.Generator().manual_seed(cfg['rng'][k]) for k in ('base_sampler','base_noise','pair_sampler','pair_noise','id_dropout')}
  pool=sorted(range(len(ds)),key=lambda i:ds[i][3]['sample_id']);bs=cfg['batch_size'];ps=cfg['pair_batch_size'];max_updates=cfg['max_updates'];min_updates=cfg['min_updates'];val_every=cfg['val_every']
  if a.smoke=='cpu':
-  pool=[min((i for i in range(len(ds)) if int(ds[i][3]['platform_id'])==eid),key=lambda i:ds[i][3]['sample_id']) for eid in (2,3)];bs=2;ps=1;max_updates=2;min_updates=0;val_every=2
+  pool=[min((i for i in range(len(ds)) if int(ds[i][3]['platform_id'])==eid),key=lambda i:ds[i][3]['sample_id']) for eid in (sorted(set(int(v) for v in ds.z['platform_id'])) if study else (2,3))];bs=2;ps=1;max_updates=2;min_updates=0;val_every=2
  elif a.smoke=='gpu':max_updates=4;min_updates=0;val_every=2
  def cache_identity(dataset):
   z=dataset.z
@@ -219,11 +234,15 @@ def proxy_train():
   state['elapsed_seconds']=prior_elapsed+time.time()-session_started
   publish({'model':model.state_dict(),'optimizer':opt.state_dict(),'scaler':scaler.state_dict(),'scheduler':scheduler.state_dict(),'training_state':state,'rng':capture_rng(streams),'config':frozen,'method':a.method,'profile':'proxy_ab','input_identity':input_identity},out/'last.pt')
  records=load_segments(a.val_navigation_manifest)
- if not records or any(r['split']!='val' or r['embodiment'] not in ('diff','omni') for r in records):raise ValueError('navigation validation must be nonempty Omni/Diff val')
+ robots=sorted({ds[i][3]['embodiment'] for i in range(len(ds))}) if study else ['diff','omni']
+ if study:
+  if ds.z.get('experiment_profile')!='four_groups' or vd.z.get('experiment_profile')!='four_groups':raise ValueError('four-group cache marker required')
+  if set(robots)!=set(r['embodiment'] for r in trajectories if r['split']=='train'):raise ValueError('training platform membership differs from frozen split')
+ if not records or any(r['split']!='val' or r['embodiment'] not in robots for r in records):raise ValueError('validation platform/split differs from frozen training group')
  if a.smoke!='none':
   from tartan.research_score.evaluation.goal_benchmark import prepare_episode
   selected=[];input_checks=[]
-  for robot in ('diff','omni'):
+  for robot in robots:
    candidates=sorted((r for r in records if r['embodiment']==robot),key=lambda r:r['sample_id'])
    for record in candidates:
     prepared=prepare_episode(record,robot);route,_,_,_,cells,_,_,invalid=prepared
@@ -256,7 +275,7 @@ def proxy_train():
    for start in range(0,len(ids),micro):
     end=min(start+micro,len(ids));piece=sliced(batch,start,end)
     with torch.autocast(device_type=a.device,enabled=a.amp):
-     term,_,_,_,_,_=proxy_forward(model,c,piece,streams['base_noise'],streams['id_dropout'],wrapped,a.device,(noise[0][start:end],noise[1][start:end]));term=term*piece[2].sum().to(a.device)/base_den.to(a.device)
+     term,_,_,_,_,_=forward(model,c,piece,streams['base_noise'],streams['id_dropout'],wrapped,a.device,(noise[0][start:end],noise[1][start:end]));term=term*piece[2].sum().to(a.device)/base_den.to(a.device)
     scaler.scale(term).backward();losses['base']+=float(term.detach())
   pairids=[]
   if wrapped:
@@ -271,8 +290,8 @@ def proxy_train():
     for start in range(0,len(indices),pmicro):
      end=min(start+pmicro,len(indices));shared_noise=(pn[0][start:end],pn[1][start:end])
      with torch.autocast(device_type=a.device,enabled=a.amp):
-      _,oa,ta,ma,_,_=proxy_forward(model,c,sliced(pa,start,end),streams['pair_noise'],streams['id_dropout'],True,a.device,shared_noise)
-      _,ob,tb,mb,_,_=proxy_forward(model,c,sliced(pb,start,end),streams['pair_noise'],streams['id_dropout'],True,a.device,shared_noise)
+      _,oa,ta,ma,_,_=forward(model,c,sliced(pa,start,end),streams['pair_noise'],streams['id_dropout'],True,a.device,shared_noise)
+      _,ob,tb,mb,_,_=forward(model,c,sliced(pb,start,end),streams['pair_noise'],streams['id_dropout'],True,a.device,shared_noise)
       terms=proxy_pair_losses(oa['decomposition'],ob['decomposition'],ta,tb,ma,mb,pairbatch['pair_valid'][start:end].to(a.device),pairbatch['T_a'][start:end].to(a.device),pairbatch['T_b'][start:end].to(a.device),c.state_normalizer,model.classifier,denominators={k:v.to(a.device) if torch.is_tensor(v) else v for k,v in den.items()})
       q=cfg['objective'];pair_loss=q.get('pair_denoising_weight',1.)*terms['pair_diff']+q['lambda_inv']*terms['inv']+q['lambda_swap']*terms['swap']+q['lambda_sep']*terms['sep']
      scaler.scale(pair_loss).backward()
@@ -285,7 +304,7 @@ def proxy_train():
   if not torch.isfinite(norm) and not a.amp:raise FloatingPointError('nonfinite Proxy gradient')
   if a.smoke=='cpu' and u==1:
    checks['second_step_gradients']={k:float(p.grad.norm()) for k,p in model.named_parameters() if p.grad is not None and ('proxy_history' in k or 'residual' in k or 'classifier' in k)}
-   for module in ('proxy_history',)+(('residual','classifier') if wrapped else ()):
+   for module in (() if a.disable_history else ('proxy_history',))+(('residual','classifier') if wrapped else ()):
     if not any(module in k and v>0 for k,v in checks['second_step_gradients'].items()):raise AssertionError('missing second-step gradient: '+module)
   old_scale=scaler.get_scale();scaler.step(opt);scaler.update()
   if scaler.get_scale()<old_scale:
@@ -296,15 +315,18 @@ def proxy_train():
    state['pair_draw_counts'][pair_id]=state['pair_draw_counts'].get(pair_id,0)+1
   row={'target_updates':state['update'],'base_ids':batch[3]['sample_id'],'pair_ids':pairids,'losses':losses,'lr':opt.param_groups[0]['lr'],'step_s':time.perf_counter()-step_started,'pair_s':pair_seconds}
   if a.smoke!='none':state['last_noise']={'base_t':noise[0].clone(),'base_noise':noise[1].clone(),**({'pair_t':pn[0].clone(),'pair_noise':pn[1].clone()} if wrapped else {})}
-  if state['update']>=state['next_val'] and a.smoke!='cpu':
+  epoch_end=state['cursor']==len(state['permutation'])
+  validate_now=validation_due(state,cfg,study and a.smoke=='none')
+  if study:row.update(epoch=state['epoch'],completed_epochs=state['epoch'] if epoch_end else state['epoch']-1)
+  if validate_now and a.smoke!='cpu':
    validation_started=time.perf_counter();rng=capture_rng(streams);model.eval()
    try:
     with torch.no_grad():
-     nav=[rollout(r,c,model,wrapped,i,inference_seed=20260914) for i,r in enumerate(records)]
+     nav=[{**rollout(r,c,model,wrapped,i,inference_seed=seed),'inference_seed':seed} for seed in (cfg['inference_seeds'] if study else [20260914]) for i,r in enumerate(records)]
      vg_base=torch.Generator().manual_seed(20260914);vid_base=torch.Generator().manual_seed(14);val_sse=0.;val_points=0
      for start in range(0,len(vd),cfg['batch_size']):
       vb=default_collate([vd[i] for i in range(start,min(start+cfg['batch_size'],len(vd)))])
-      value,_,_,vm,_,_=proxy_forward(model,c,vb,vg_base,vid_base,wrapped,a.device)
+      value,_,_,vm,_,_=forward(model,c,vb,vg_base,vid_base,wrapped,a.device)
       count=int(vm.sum());val_sse+=float(value)*count;val_points+=count
      row['val_denoising']={'sse':val_sse,'valid_points':val_points,'mse':val_sse/val_points}
 
@@ -313,8 +335,8 @@ def proxy_train():
       allpairs=default_collate([valpairs[i] for i in range(len(valpairs))]);va,vb=allpairs['a'],allpairs['b'];valid_common=va[2]&vb[2]&allpairs['pair_valid'][:,None];den={'a':va[2].sum(),'b':vb[2].sum(),'common':valid_common.sum(),'classifier':2*len(valpairs)};pair_diagnostic={};vg=torch.Generator().manual_seed(20260914);vid=torch.Generator().manual_seed(14)
       for start in range(0,len(valpairs),cfg['pair_microbatch_size']):
        end=min(start+cfg['pair_microbatch_size'],len(valpairs));noise=draw_noise(end-start,vg)
-       _,oa,ta,ma,_,_=proxy_forward(model,c,sliced(va,start,end),vg,vid,True,a.device,noise)
-       _,ob,tb,mb,_,_=proxy_forward(model,c,sliced(vb,start,end),vg,vid,True,a.device,noise)
+       _,oa,ta,ma,_,_=forward(model,c,sliced(va,start,end),vg,vid,True,a.device,noise)
+       _,ob,tb,mb,_,_=forward(model,c,sliced(vb,start,end),vg,vid,True,a.device,noise)
        terms=proxy_pair_losses(oa['decomposition'],ob['decomposition'],ta,tb,ma,mb,allpairs['pair_valid'][start:end].to(a.device),allpairs['T_a'][start:end].to(a.device),allpairs['T_b'][start:end].to(a.device),c.state_normalizer,model.classifier,denominators={k:v.to(a.device) if torch.is_tensor(v) else v for k,v in den.items()})
        for key,value in terms.items():pair_diagnostic[key]=pair_diagnostic.get(key,0.)+float(value)
      row['val_pair_diagnostic']=pair_diagnostic
@@ -322,8 +344,8 @@ def proxy_train():
    finally:restore_rng(rng,streams);model.train()
    valid=[r for r in nav if r['included_in_denominator']]
    if not valid:raise ValueError('no valid validation tasks')
-   platforms={robot:episode_macro([r for r in valid if r['embodiment']==robot]) for robot in ('diff','omni')}
-   if any(v['episodes']==0 for v in platforms.values()):raise ValueError('both validation platforms required')
+   platforms={robot:episode_macro([r for r in valid if r['embodiment']==robot]) for robot in robots}
+   if any(v['episodes']==0 for v in platforms.values()):raise ValueError('all frozen validation platforms required')
    macro={key:float(np.mean([v[key] for v in platforms.values()])) for key in ('sr','spl','cr','goal_progress')};row['navigation']=macro;row['platform_navigation']=platforms;scheduler.step(macro['sr'])
    if state['best'] is None or checkpoint_selection_key(row)>checkpoint_selection_key(state['best']):
     state['best']=row;state['best_model']={k:v.detach().cpu().clone() for k,v in model.state_dict().items()};publish({'model':state['best_model'],'method':a.method,'profile':'proxy_ab','target_updates':state['update'],'config':frozen,'navigation_metrics':macro},out/'navigation_best.pt')
@@ -332,13 +354,13 @@ def proxy_train():
    state['next_val']+=val_every;row['validation_s']=time.perf_counter()-validation_started
   state['history'].append(row);print(json.dumps(row),flush=True)
   if a.smoke!='none' or 'navigation' in row:checkpoint()
-  if a.smoke=='none' and state['update']>=min_updates and state['stale']>=cfg['patience']:break
+  if a.smoke=='none' and state['update']>=min_updates and state['stale']>=cfg['patience'] and (not study or 'navigation' in row):break
  if a.smoke=='none':checkpoint()
  if a.smoke=='cpu':
   model.eval();probe=default_collate([ds[i] for i in pool]);rng=capture_rng(streams)
-  with torch.no_grad():_,before,_,_,_,_=proxy_forward(model,c,probe,streams['base_noise'],streams['id_dropout'],wrapped,a.device)
+  with torch.no_grad():_,before,_,_,_,_=forward(model,c,probe,streams['base_noise'],streams['id_dropout'],wrapped,a.device)
   saved=torch.load(out/'last.pt',map_location=a.device,weights_only=False);model.load_state_dict(saved['model'],strict=True);restore_rng(rng,streams)
-  with torch.no_grad():_,after,_,_,_,_=proxy_forward(model,c,probe,streams['base_noise'],streams['id_dropout'],wrapped,a.device)
+  with torch.no_grad():_,after,_,_,_,_=forward(model,c,probe,streams['base_noise'],streams['id_dropout'],wrapped,a.device)
   checks['strict_reload_equal']=torch.equal(before['score'],after['score'])
   if not checks['strict_reload_equal']:raise AssertionError('strict reload mismatch')
   if wrapped:
@@ -348,7 +370,7 @@ def proxy_train():
    if not checks['sampler_finite']:raise AssertionError('nonfinite B sampler')
   checks['validation_input_only']=input_checks
   publish(checks,out/'checks.json',True)
- result={'status':'complete' if state['update']>=max_updates or (a.smoke=='none' and state['update']>=min_updates and state['stale']>=cfg['patience']) else 'interrupted','method':a.method,'purpose':frozen['purpose'],'eligible_for_formal_result':a.smoke=='none','updates':state['update'],'stop_reason':'max_updates' if state['update']==max_updates else ('interrupted' if a.stop_after is not None and state['update']==a.stop_after else 'sr_patience'),'best_update':state['best']['target_updates'] if state['best'] else None,'base_exposures':state['base_exposures'],'pair_exposures':state['pair_exposures'],'pair_repeated_draws':state['pair_repeated_draws'],'seconds':state['elapsed_seconds'],'peak_memory_bytes':torch.cuda.max_memory_allocated() if a.device=='cuda' else None,'history':state['history']};publish(result,out/'metrics.json',True)
+ result={'completed_epochs':state['epoch'] if state['cursor']==len(state['permutation']) else state['epoch']-1,'validation_clock':'epoch5' if study else 'updates','status':'complete' if state['update']>=max_updates or (a.smoke=='none' and state['update']>=min_updates and state['stale']>=cfg['patience']) else 'interrupted','method':a.method,'purpose':frozen['purpose'],'eligible_for_formal_result':a.smoke=='none','updates':state['update'],'stop_reason':'max_updates' if state['update']==max_updates else ('interrupted' if a.stop_after is not None and state['update']==a.stop_after else 'sr_patience'),'best_update':state['best']['target_updates'] if state['best'] else None,'base_exposures':state['base_exposures'],'pair_exposures':state['pair_exposures'],'pair_repeated_draws':state['pair_repeated_draws'],'seconds':state['elapsed_seconds'],'peak_memory_bytes':torch.cuda.max_memory_allocated() if a.device=='cuda' else None,'history':state['history']};publish(result,out/'metrics.json',True)
 
 def compare_checkpoints():
  p=argparse.ArgumentParser();p.add_argument('--compare-checkpoints',nargs=2,required=True);p.add_argument('--comparison-output',required=True);a=p.parse_args()

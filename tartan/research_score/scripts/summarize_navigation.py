@@ -49,6 +49,33 @@ def proxy_summary():
  report+=['','B minus A (offline trajectory macro): '+json.dumps(delta),'','Limitations:']+['- '+x for x in limitations+output['scientific_limits']]
  publish_text('\n'.join(report)+'\n',root/'report.md')
 
+def four_group_summary():
+ from tartan.research_score.artifacts import publish,publish_text
+ from tartan.research_score.scripts.evaluate_navigation import episode_macro
+ p=argparse.ArgumentParser();p.add_argument('--profile',required=True);p.add_argument('--run-root',required=True);a=p.parse_args();root=Path(a.run_root);groups={};table=[]
+ for group in ('g1','g2','g3','g4'):
+  metrics=json.loads((root/'train'/group/'metrics.json').read_text());nav=json.loads((root/'eval'/group/'navigation'/'summary.json').read_text());off=json.loads((root/'eval'/group/'offline'/'summary.json').read_text())
+  if metrics['status']!='complete' or nav['status']!='complete' or off['uncovered_trajectories']:raise ValueError('incomplete group '+group)
+  best=next(r for r in metrics['history'] if r['target_updates']==metrics['best_update']);losses=[r['losses']['base'] for r in metrics['history']]
+  frozen=json.loads((root/'train'/group/'config.json').read_text());data=Path('/tj-share/cross_diffusion_workdir/data')/frozen['proxy_ab']['paths']['data_id']
+  declared={r['trajectory_key'] for line in (data/'trajectories.jsonl').read_text().splitlines() for r in [json.loads(line)] if r['split']=='test'}
+  if declared!=set(nav['raw_trajectory_coverage']) or declared!=set(off['covered_trajectories']):raise ValueError('incomplete final test trajectory coverage '+group)
+  groups[group]={'updates':metrics['updates'],'completed_epochs':metrics['completed_epochs'],'best_update':metrics['best_update'],'best_epoch':best['epoch'],'train_loss_first250':sum(losses[:250])/len(losses[:250]),'train_loss_last250':sum(losses[-250:])/len(losses[-250:]),'validation':best['navigation'],'validation_loss':best['val_denoising']['mse'],'test':nav['episode_macro'],'offline':off['trajectory_macro'],'test_trajectory_count':len(declared),'test_rollouts':nav['segments_selected']}
+  table.append({'group':group,**{k:groups[group][k] for k in ('updates','completed_epochs','best_update','best_epoch')},**{k:nav['episode_macro'][k] for k in ('sr','cr','spl')},**off['trajectory_macro']})
+ frame=pd.read_csv(root/'eval'/'g4'/'navigation'/'per_segment.csv');g1_data=Path('/tj-share/cross_diffusion_workdir/data')/(root.name+'_g1');subset={json.loads(x)['trajectory_key'] for x in (g1_data/'test.jsonl').read_text().splitlines()}
+ matched=frame[frame.trajectory_key.isin(subset)&frame.included_in_denominator]
+ shared_test=episode_macro(matched.to_dict('records'))
+ historical=Path('/tj-share/cross_diffusion_workdir/archive/experiment1/results')
+ old=json.loads((historical/'eval/pretrain_finetune_100pct_seed11/summary.json').read_text());old_train=json.loads((historical/'train/pretrain_finetune_100pct_seed11/metrics.json').read_text())
+ comparison={'reference':str(historical),'old_test':old['episode_macro'],'g1_minus_original_test':{k:groups['g1']['test'][k]-old['episode_macro'][k] for k in ('sr','cr','spl')},'original_best_epoch':old_train['best_navigation']['epoch'],'original_updates':old_train['target_updates'],'original_validation':{k:old_train['best_navigation']['macro_'+k] for k in ('sr','cr','spl')}}
+ output={'status':'COMPLETE','RUN_ID':root.name,'groups':groups,'g4_on_g1_test_subset':shared_test,'experiment1_comparison':comparison,'limitations':['one training seed; inference seeds are not independent training repetitions','new complete-trajectory splits differ from original 16/3/5','original map-index scale differs from native occupancy scale; scores are not an isolated platform ablation','original SPL-first/loss scheduler/epoch budget differs from current SR-first/SR scheduler/update budget','observed camera reference, assumed circular footprints and simplified heading controller','D024 route failures stay in denominator']}
+ pd.DataFrame(table).to_csv(root/'main_table.csv',index=False);publish(output,root/'summary.json',True)
+ lines=['# Four-group results','', '| Group | Updates | Epochs | Best update | Best epoch | Test SR | Test CR | Test SPL | ADE | FDE |','|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+ for group,g in groups.items():lines.append('| '+ ' | '.join(str(v) for v in [group,g['updates'],g['completed_epochs'],g['best_update'],g['best_epoch'],g['test']['sr'],g['test']['cr'],g['test']['spl'],g['offline']['ade'],g['offline']['fde']])+' |')
+ lines+=['','## Group 1 versus original experiment 1','',json.dumps(comparison,ensure_ascii=False,indent=2),'','## Group 4 on group 1 held-out ANYmal subset','',json.dumps(shared_test,indent=2),'','## Limits','']+['- '+v for v in output['limitations']]
+ publish_text('\n'.join(lines)+'\n',root/'report.md');publish({'status':'COMPLETE','RUN_ID':root.name,'pending':[],'next_command':None,'report':str(root/'report.md')},root/'status.json',True)
+
 if __name__=='__main__':
- if '--profile' in sys.argv:proxy_summary()
+ if '--profile' in sys.argv and sys.argv[sys.argv.index('--profile')+1]=='four_groups':four_group_summary()
+ elif '--profile' in sys.argv:proxy_summary()
  else:transfer_summary()

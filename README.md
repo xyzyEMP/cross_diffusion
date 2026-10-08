@@ -1,5 +1,8 @@
 # Cross-Diffusion
 
+当前推进四组统一普通Diffusion Planner实验（2026-10-08），配置`four_groups`，每5个完整epoch验证。g1 ANYmal70/10/20，g2 Omni70/10/20，g3 Diff70/10/20，g4 Diff+Omni80/20训练/验证、全部24条ANYmal测试。执行合同与旧实验1精确差异见[TRAINING_PROTOCOL.md](TRAINING_PROTOCOL.md)开头，实际状态见[PROJECT_STATUS.md](PROJECT_STATUS.md)。既有Proxy A/B结果保留，不是这四组的新结果。
+
+
 当前执行Proxy A/B：真实Omni+Diff完整trajectory分别80/20训练/验证，全部ANYmal仅最终test；8m/80点路径，A/B共同历史16维latent与3项运动RMS及mask。B另使用同split真配对和辅助损失。
 
 CPU已全部通过，状态CPU_READY_GPU_PENDING，DATA_ID=`20261002T045353Z_proxy_cpu`。基础窗口4280train/457val/3071test，配对218train/20val，pair缓存396/30侧窗口。P5b GPU验收已通过，正式运行20261002T184606Z_proxy_seed11已完成A/B训练、全部ANYmal评价及报告。运行实况见PROJECT_STATUS及正式run/status.json。

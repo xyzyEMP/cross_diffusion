@@ -11,7 +11,8 @@ class CachedTargetDataset(Dataset):
    required=('metadata','platform_id','ego_history','history_mask','history_dt','history_dt_mask','motion_rms','motion_mask','representation_policy','normalizer_reference','manifest_path')
    if any(k not in self.z for k in required):raise ValueError('incomplete Proxy physical-history cache')
    if 'proxy_context' in self.z or 'latent' in self.z:raise ValueError('learned Proxy context may not be cached')
-   if self.z['representation_policy']!='anchor-inclusive-xy-8m-80-first-duplicate':raise ValueError('Proxy representation mismatch')
+   expected='future-xy-8m-80-stations-0.1-to-8' if self.z.get('experiment_profile')=='four_groups' else 'anchor-inclusive-xy-8m-80-first-duplicate'
+   if self.z['representation_policy']!=expected:raise ValueError('Proxy representation mismatch')
    if len(self.z['metadata'])!=len(self.z['sample_ids']) or any(m['sample_id']!=sid for m,sid in zip(self.z['metadata'],self.z['sample_ids'])):raise ValueError('Proxy cache metadata IDs mismatch')
  def __len__(self):return len(self.indices)
  def __getitem__(self,j):

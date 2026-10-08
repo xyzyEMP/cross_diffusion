@@ -36,6 +36,7 @@ class TartanTargetDataset(Dataset):
    for k in ('ego_history','history_mask','history_dt','history_dt_mask','motion_rms','motion_mask'):
     inputs[k]=np.asarray(history[k],dtype=bool if k.endswith('mask') else np.float32)
    metadata={k:r[k] for k in ('sample_id','trajectory_key','platform_id','split','embodiment','history_start_frame','history_end_frame','time_source','body_heading_source','frame_convention')}
+   if r.get('experiment_profile')=='four_groups':metadata.update(experiment_profile='four_groups',study_group=r['study_group'])
    metadata.update({k:r.get(k) for k in ('reference_pose_policy','reference_heading_source','reference_approval_record')})
    return inputs,y,valid,metadata
   return inputs,y,valid,r["sample_id"]

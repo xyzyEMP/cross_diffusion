@@ -1,6 +1,12 @@
 # 项目架构与文件清单
 
-更新：2026-10-03。此清单覆盖全部正式代码、测试、配置和维护文档。每个文件对应当前任务；未登记文件视为可疑。实验一以 TRAINING_PROTOCOL.md 为准，独立 Proxy A/B 以 proxy-training-protocol.md 为准，执行规则见 AGENTS.md。
+更新：2026-10-08。此清单覆盖全部正式代码、测试、配置和维护文档。每个文件对应当前任务；未登记文件视为可疑。实验一以 TRAINING_PROTOCOL.md 为准，独立 Proxy A/B 以 proxy-training-protocol.md 为准，执行规则见 AGENTS.md。
+
+g4物化可复用本轮g1/g2/g3相同sample_id的确定性物理特征，先核对冻结80点target/mask完全相同，再按g4冻结manifest更新split/study_group；cache记录reused_feature_sources，不复用latent、统计量或模型checkpoint，避免重复路线计算。
+
+当前四组研究复用现有build_transfer_manifests、materialize_target_features、build_navigation_tasks、audit_navigation_routes、train_transfer、run_transfer_training和evaluate_navigation、summarize_navigation；新增four_groups配置，不新建源码文件/入口。core负责完整trajectory划分与0.1…8m未来站点；cache携带显式experiment_profile隔离新表示与旧Proxy；trainer仅该配置允许ANYmal域内训练，正式每5完整epoch验证，旧proxy_ab仍250updates且ANYmal禁训。run脚本协调同一UTC RUN_ID下真实数据→preflight→GPU smoke→两GPU分批四组→离线/闭环→旧实验1比较。正式说明复用TRAINING_PROTOCOL，run内说明是产物。
+
+用户明确授权原实验1必要旧代码/结果放输出盘archive/experiment1，属于历史参考，不属于正式源码清单/执行入口；仅此归档例外，其他本机项目外历史不部署。目录/精确差异和当前阶段见PROJECT_STATUS及TRAINING_PROTOCOL。
 
 ## 目录与职责
 
@@ -61,7 +67,7 @@ Proxy调用（真实CPU及正式GPU全链通过）：Dataset/cache物理history�
 
 新运行命名 YYYYMMDDTHHMMSSZ_label，仅使用ASCII字母、数字、点、下划线和连字符。训练runner自动生成时间戳；评价显式指定同一RUN_ID。重用RUN_ID只跳过已完成子任务，不完整子任务明确失败；Proxy已实现完整last恢复；CPU完整恢复已验证，GPU AMP/恢复已通过P5b。直接CLI的--output必须由调用者放入时间戳run目录。输出根OUTPUTS.md记录实际产物与搬迁映射；冻结输入和指标内容不改写。
 
-服务器代码 /zeron-vepfs/tjqc/cross-diffusion 与本机正式源码一致。Git/工具私有目录和明确登记为“本机文档交付”的开题稿不部署；checkpoints/model.pth是服务器保留的源权重，不纳入源码清单。归档只存本机独立目录 /home/yzy/文档/ChatGPT/cross_diffusion_local_history/2026-10-01_server_cleanup，不部署服务器。
+服务器代码 /zeron-vepfs/tjqc/cross-diffusion 与本机正式源码一致。Git/工具私有目录和明确登记为“本机文档交付”的开题稿不部署；checkpoints/model.pth是服务器保留的源权重，不纳入源码清单。除用户批准的输出盘archive/experiment1参考归档外，其他归档只存本机独立目录 /home/yzy/文档/ChatGPT/cross_diffusion_local_history/2026-10-01_server_cleanup，不部署服务器。
 
 ## 维护规则
 
@@ -80,6 +86,7 @@ Proxy调用（真实CPU及正式GPU全链通过）：Dataset/cache物理history�
 | `README.md` | 仓库总入口、安装与两类实验范围 | 项目维护 |
 | `TRAINING_PROTOCOL.md` | 实验一冻结目标协议与当前实现/服务器复现缺口 | 项目维护 |
 | `thesis_proposal.md` | 当前教师交流用硕士开题阶段稿；依据现有协议、状态与历史结果撰写，非执行入口，不部署服务器，不改变实验协议 | 本机文档交付 |
+| `baseline_alignment.md` | 当前PLUTO/NoMaD三组70/10/20域内baseline共同设定；说明数据处理、训练与指标口径，输入表示由各模型负责；独立于Proxy80/20合同，不作为已有运行完成证据，不部署服务器 | 本机文档交付 |
 | `checkpoints/args.json` | 原checkpoint输入shape、模型参数和normalizer配置 | 预训练模型加载/迁移 |
 | `diffusion_planner/__init__.py` | 包导入边界 | 预训练模型加载/迁移 |
 | `diffusion_planner/model/__init__.py` | 包导入边界 | 预训练模型加载/迁移 |
@@ -202,3 +209,5 @@ Proxy调用（真实CPU及正式GPU全链通过）：Dataset/cache物理history�
 当前CPU节点`20261002T045353Z_proxy_cpu`已完成，包括218/20增量、396/30配对侧缓存及新增B配对的真实smoke/完整恢复。来源reference/time/approval从旁注和metadata传入共享loader；cache只保存物理history/RMS，latent在线编码。原子文本发布处理实际FSX空页，恢复比较和已完成任务支持跳过。
 
 pair.run_pair_mining的--base-window-dir复用现有数据/共同frame门禁；materialize_target_features的--reuse-cache复用同normalizer/身份物理特征；CPU smoke优先验证新增native配对。GPU续接script与报告是run产物，不是平行源码入口。来源证据、批准记录、冻结输入、必要checkpoint及实际config/command/metrics保留；cleanup_record记录精确清理。当前协议和状态无重复历史节点；独立transfer_primary接口保留但不作为本轮入口。
+
+2026-10-08：原始backbone对照复用train_transfer.py的A-only --disable-history；默认历史A/B及原checkpoint配置保持兼容。evaluate_navigation.load_model从冻结cli选择是否启用历史再strict加载；无历史模型不可执行latent诊断。无新增源码文件。run内runner为实际命令编排产物，不是新训练入口。

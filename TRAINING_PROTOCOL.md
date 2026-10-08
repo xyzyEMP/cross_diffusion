@@ -1,3 +1,56 @@
+# 当前执行：四组统一 Diffusion Planner 实验
+
+批准日期：2026-10-08。RUN_ID=`20261008T132918Z_four_groups`。本节为本轮执行合同；后面的旧迁移矩阵只保留作协议背景，不自动执行。
+
+| 组 | 完整trajectory训练/验证/测试 | 当前可用轨迹的预计数量 | 最终测试 |
+|---|---|---|---|
+| g1 | ANYmal 70/10/20 | 17/2/5 | 冻结5条ANYmal |
+| g2 | Omni 70/10/20 | 4/1/1 | 冻结1条Omni |
+| g3 | Diff 70/10/20 | 3/1/1 | 冻结1条Diff |
+| g4 | Diff与Omni分别80/20 | Diff 4/1、Omni 5/1 | 全部24条ANYmal |
+
+先按完整trajectory排序，以split seed=20260911确定性shuffle，再冻结membership，随后派生窗口。小平台按整数取整并保证train/val/test非空，不按表现调整split。训练seed=11；验证和最终推理seed=11/23/47；这三次推理不等于三次独立训练。g4与g1测试范围不同，额外从g4已经算出的逐任务结果提取g1同5条轨迹指标，不增加模型前向。新窗口数以实际manifest为准，不沿用原A的4280或原实验1的2048。
+
+**共同模型与训练。** 四组都使用原实验1的普通Diffusion Planner backbone，独立从原始nuPlan EMA初始化，全主干可训练。源为`/zeron-vepfs/tjqc/cross-diffusion/checkpoints/model.pth`，来源记录为`/tj-share/cross_diffusion_workdir/runs/20261002T045353Z_proxy_cpu/source_provenance.json`。不加载旧ANYmal、A/B或smoke权重。无history latent、RMS、ID、adapter、classifier、配对或辅助loss；`--disable-history`为必要参数。使用原checkpoint normalizer，邻居/静态物体槽位为空，不增加感知标签处理。
+
+**共同数据与几何。** 从anchor向后读到实际走满8米，按0.1、0.2、…、8.0米得到80个未来空间站点；current state单独提供，不重复作首个预测点。训练只保留完整8米监督，短尾记录为`incomplete_8m`，不补造轨迹；anchor从20开始、步长10。监督为XY/cos(yaw)/sin(yaw)，不表达固定8秒、速度或原地转向。采用已有证据支持的前相机观测参考系，不声称已知真实机体外参。姿态、goal、occupancy统一NWU；native相机局部0.2米体素按bounds/完整quaternion解码，转世界再转anchor局部，形成101×101@0.5米BEV，约50米范围。
+
+**验证与选模。** AdamW，lr=1e-4，weight_decay=1e-4，batch=64，clip=5，GPU AMP；四维去噪SSE/有效点。每5个完整epoch结束做一次完整validation loss和导航验证（第5/10/15…epoch），日志同时记录epoch与update；工程smoke按第2/4更新验证，不能作为正式结果。选模仍按validation trajectory-macro SR→SPL→低CR→progress→更早update，g4等权平均Diff/Omni；只使用本组val。共同预算仍最少5000、最多10000次更新，连续10次导航检查SR未提升早停，仅在验证节点触发；最大更新数可能截断最后epoch，不能把半个epoch写成完整epoch。LR按每次验证SR调整，mode=max/factor=.5/patience=2/min_lr=5e-6。此次用户更改的是验证频率，没有把选模、scheduler和预算恢复成旧实验1。
+
+**共同评价。** 使用各自`navigation_best.pt`；离线ADE/FDE和闭环SR/CR/SPL按trajectory宏平均，保存逐窗口/逐任务结果。每次规划使用当前朝向局部frame，预测转回任务坐标执行前1米、0.1米插值，最多16次replan，成功距离0.75米。圆形半径ANYmal=.35米、Diff/Omni=.5米为既定代理；控制器以实际位移方向更新heading，仍不直接执行预测yaw。D024连通失败统一安全停车，记route_failure、保留分母、不计collision；invalid-map统一剔除并单独列数。首次训练前检查真实val坐标往返、完整8米、未来监督不能改变地图/路线输入，并保存地图/路径叠图及记录路径碰撞计数；发现坐标错误应修复后续接，不筛任务或放宽阈值提高分数。
+
+**与最新原实验1的区别及选择。** 对照必须使用2026-09-29总结对应的`finetune_navigation_selection_earlystop_v1`，实际保留结果为`results/transfer/20261001T154600Z_retained_spl_seed11`，而不是更早loss选模实验。
+
+| 项目 | 原实验1实际设置 | 本轮选择与理由 |
+|---|---|---|
+| 模型 | 普通pretrain_finetune，无新增history模块 | 保持同backbone与原始nuPlan独立起点 |
+| 未来监督 | 先取之后80帧约8秒，再重采样8米容器；2048中仅692个窗口完整80点 | 读取实际完整8米，80未来站点；落实用户固定空间长度意图 |
+| 首点 | 来自下一帧记录，在空间重采样起点附近 | 从0.1米预测，current token单独提供；是明确表示选择，不称旧首点错误 |
+| 姿态坐标 | 原记录XY/yaw，NED约定 | 所有输入统一NWU；NED本身不是错误，关键是全流程一致 |
+| occupancy | 直接以0.5米解释同源0.2米体素索引 | 按实际体素尺度、bounds和完整姿态显式转换，修正已核实的2.5倍尺度假设差异 |
+| 网格 | 至少250格；native物理范围约50米，不能据旧错误尺度称125米 | 101格@0.5米，显式转换后仍约50米范围 |
+| 闭环frame | 固定任务坐标；当前state包含yaw | 每次当前朝向局部规划，再转回任务frame；对齐训练局部输入，未证实旧固定frame必然错误 |
+| split/任务 | ANYmal16/3/5；val35×3seed，test63任务、默认seed10000 | 各平台完整trajectory冻结；g1 17/2/5，其他如上；统一3个最终推理seed，任务数按新manifest记录 |
+| 验证 | 每5epoch | 保留每5epoch |
+| 选模/预算/LR | SPL优先；最少30/最多100epoch；patience8；每10epoch按val loss(min)调LR | 统一SR优先、5000–10000update、patience10和SR(max)调LR；避免不同数据量的epoch等于不同训练更新预算 |
+
+原实验1实际100%结果：停止85epoch/2720update，best45epoch/1440update；val macro SR=.7051767677、CR=.2114898990、SPL=.6506459323；test macro SR=.6797827173、CR=.1587662338、SPL=.6232292192。g1完成后报告对应新指标、差值、loss趋势和实际窗口/预算，同时说明split、几何与选模都变了，不能仅用差值归因模型好坏。当前几何代理与记录路径安全目标冲突仍作为限制报告；不迎合“必然接近旧分数”的预期。
+
+**服务器路径与入口。** 正式源码`/zeron-vepfs/tjqc/cross-diffusion`；Python`/root/miniconda3/envs/diffusion-planner/bin/python`；所有产物仅`/tj-share/cross_diffusion_workdir`。本轮说明保存为`runs/20261008T132918Z_four_groups/experiment_description.md`；归档说明`archive/experiment1/README.md`、旧代码`archive/experiment1/code/`、结果`archive/experiment1/results/`、用户阶段总结`archive/experiment1/stage_summary_20260929.md`。归档从本机已保留的旧入口和依赖提取，不部署到正式源码；旧结果从服务器原保留目录复制，不删除原件、不作为当前训练起点。用户明确授权此例外，不扩大同步其他历史。
+
+同RUN_ID启动/恢复（runner自动跳过已经完成的组；只从本组last完整恢复）：
+
+```bash
+cd /zeron-vepfs/tjqc/cross-diffusion
+PROFILE=four_groups RUN_ID=20261008T132918Z_four_groups bash tartan/research_score/scripts/run_transfer_training.sh
+```
+
+g4物化可复用本轮g1/g2/g3相同sample_id的确定性物理特征，先核对冻结80点target/mask完全相同，再按g4冻结manifest更新split/study_group；cache记录reused_feature_sources，不复用latent、统计量或模型checkpoint，避免重复路线计算。
+
+共享数据分别为`data/20261008T132918Z_four_groups_g1`至`_g4`，cache同DATA_ID；主run保存actual config/commands/logs、preflight、每组smoke/train/eval、last/best、summary/report/main_table。2张L20按g1+g2、g3+g4分两批，每GPU一个任务。原实验和已完成消融不重跑。
+
+<!-- HISTORICAL_TRANSFER_PROTOCOL -->
+
 # Cross-Diffusion 训练与测试协议
 
 适用范围：本文仅原实验一transfer。当前Proxy A/B使用根`proxy-training-protocol.md`及唯一实施计划，不沿用本文件ANYmal训练划分/四方法预算。

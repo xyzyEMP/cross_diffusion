@@ -117,3 +117,14 @@ def test_metadata_replaces_warm_file_without_truncation(tmp_path):
  assert p.read_text()
  artifacts.publish({'actual':'record'},p,True)
  assert p.read_text().strip()=='{\n  "actual": "record"\n}'
+
+
+def test_five_epoch_validation_uses_complete_pass_not_update_count():
+    state={'epoch':5,'cursor':100,'permutation':list(range(101)), 'update':250,'next_val':250}
+    cfg={'val_every_epochs':5}
+    assert not train_transfer.validation_due(state,cfg,True)
+    state['cursor']=101
+    assert train_transfer.validation_due(state,cfg,True)
+    state['epoch']=6
+    assert not train_transfer.validation_due(state,cfg,True)
+    assert train_transfer.validation_due(state,cfg,False)

@@ -22,6 +22,10 @@ def main():
 def materialize_proxy(a,out):
  c=Config(a.args,None);raw=[json.loads(x) for x in Path(a.manifest).read_text().splitlines() if x]
  if any(r.get('profile')!='proxy_ab' for r in raw):raise ValueError('not a Proxy manifest')
+ # Group 4 reuses deterministic features from this study's frozen groups, never model states.
+ if raw and raw[0].get('experiment_profile')=='four_groups' and raw[0].get('study_group')=='g4' and not a.reuse_cache:
+  manifest=Path(a.manifest).resolve();prefix=manifest.parent.name.removesuffix('_g4');cache_root=manifest.parent.parent.parent/'cache'
+  a.reuse_cache=[str(cache_root/(prefix+'_'+group)/(split+'.pt')) for group in ('g1','g2','g3') for split in ('base_train','base_val','test') if (cache_root/(prefix+'_'+group)/(split+'.pt')).is_file()]
  lookup={}
  for source in a.reuse_cache:
   z=torch.load(source,map_location='cpu',weights_only=False)
@@ -31,8 +35,15 @@ def materialize_proxy(a,out):
  for i in range(len(ds)):
   if raw[i]['sample_id'] in lookup:
    z,j=lookup[raw[i]['sample_id']];meta=z['metadata'][j]
-   if any(meta[k]!=raw[i][k] for k in ('trajectory_key','split','history_start_frame','history_end_frame','reference_pose_policy')):raise ValueError('reuse cache identity differs')
+   if z['representation_policy']!=raw[i]['provenance']['representation_policy']:raise ValueError('reuse cache representation differs')
+   study=raw[i].get('experiment_profile')=='four_groups' and z.get('experiment_profile')=='four_groups'
+   keys=('trajectory_key','history_start_frame','history_end_frame','reference_pose_policy')+(() if study else ('split',))
+   if any(meta[k]!=raw[i][k] for k in keys):raise ValueError('reuse cache identity differs')
    x={k:z[k][j] for k in items if k not in ('trajectory','valid_mask')};y=z['trajectory'][j];m=z['valid_mask'][j]
+   if study:
+    if not torch.equal(y,torch.tensor(raw[i]['trajectory']['fixed_arc_length_80'],dtype=y.dtype)) or not torch.equal(m,torch.tensor(raw[i]['trajectory']['valid_mask'],dtype=torch.bool)):raise ValueError('reused target differs from frozen new window')
+    meta={**meta,'split':raw[i]['split'],'study_group':raw[i]['study_group']}
+
   else:x,y,m,meta=ds[i]
   if not m.any():raise ValueError('empty validity '+meta['sample_id'])
   for k in items:
@@ -41,7 +52,9 @@ def materialize_proxy(a,out):
   if (i+1)%100==0:print(json.dumps({'built':i+1,'total':len(ds)}),flush=True)
  shapes={'ego_current_state':(10,),'lanes':(c.lane_num,c.lane_len,c.lane_state_dim),'route_lanes':(c.route_num,c.route_len,c.route_state_dim),'trajectory':(80,4),'valid_mask':(80,),'ego_history':(20,4),'history_mask':(20,),'history_dt':(19,),'history_dt_mask':(19,),'motion_rms':(3,),'motion_mask':(3,)}
  obj={k:torch.stack(v) if v else torch.empty((0,)+shapes[k],dtype=torch.bool if k.endswith('mask') else torch.float32) for k,v in items.items()}
- obj.update(profile='proxy_ab',schema_version='proxy-history-physical-v1',manifest_path=str(Path(a.manifest).absolute()),normalizer_reference=str(Path(a.args).absolute()),representation_policy='anchor-inclusive-xy-8m-80-first-duplicate',metadata=metadata,sample_ids=[m['sample_id'] for m in metadata],platform_id=torch.tensor([m['platform_id'] for m in metadata],dtype=torch.long),budget_membership=[{} for m in metadata])
+ obj.update(profile='proxy_ab',schema_version='proxy-history-physical-v1',manifest_path=str(Path(a.manifest).absolute()),normalizer_reference=str(Path(a.args).absolute()),representation_policy='anchor-inclusive-xy-8m-80-first-duplicate',reused_feature_sources=a.reuse_cache,experiment_profile=raw[0].get('experiment_profile') if raw else None,metadata=metadata,sample_ids=[m['sample_id'] for m in metadata],platform_id=torch.tensor([m['platform_id'] for m in metadata],dtype=torch.long),budget_membership=[{} for m in metadata])
+ if raw:obj['representation_policy']=raw[0]['provenance']['representation_policy']
+ if any(r['provenance']['representation_policy']!=obj['representation_policy'] for r in raw):raise ValueError('mixed representation policies')
  publish(obj,out)
  print(json.dumps({'status':'complete' if raw else 'EMPTY_SCHEMA_ONLY','samples':len(ds),'bytes':out.stat().st_size,'output':str(out),'reused_samples':sum(r['sample_id'] in lookup for r in raw)}))
 
