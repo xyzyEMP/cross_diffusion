@@ -119,6 +119,30 @@ def test_metadata_replaces_warm_file_without_truncation(tmp_path):
  assert p.read_text().strip()=='{\n  "actual": "record"\n}'
 
 
+def test_metadata_refreshes_observed_stale_page_once(tmp_path, monkeypatch):
+    import pytest
+    from pathlib import Path
+    from tartan.research_score import artifacts
+    p=tmp_path/'record.json'
+    read_bytes=Path.read_bytes
+    reads=[];refreshes=[]
+    def stale_read(path):
+        content=read_bytes(path)
+        if path==p:
+            reads.append(content)
+            if len(reads)==1:return bytes(len(content))
+        return content
+    monkeypatch.setattr(Path,'read_bytes',stale_read)
+    monkeypatch.setattr(artifacts.os,'posix_fadvise',lambda *args:refreshes.append(args))
+    artifacts.publish({'actual':'record'},p,True)
+    assert len(reads)==2 and len(refreshes)==1
+    assert p.read_text().strip()=='{\n  "actual": "record"\n}'
+    monkeypatch.setattr(Path,'read_bytes',lambda path:b'corrupt')
+    with pytest.raises(OSError,match='metadata publication mismatch'):
+        artifacts.publish({'actual':'changed'},p,True)
+    assert len(refreshes)==2
+
+
 def test_five_epoch_validation_uses_complete_pass_not_update_count():
     state={'epoch':5,'cursor':100,'permutation':list(range(101)), 'update':250,'next_val':250}
     cfg={'val_every_epochs':5}

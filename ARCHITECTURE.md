@@ -140,7 +140,7 @@ Proxy调用（真实CPU及正式GPU全链通过）：Dataset/cache物理history�
 | `tartan/data/pose_utils.py` | 三平台数据发现、pose/时间来源、固定历史RMS、已批准观测reference或有证据的SE2/SE3外参、NED/NWU、三维occupancy反量化与证据旁注读取 | 迁移数据/训练/导航 |
 | `tartan/research_score/README.md` | 当前职责层与执行入口导航 | 迁移数据/训练/导航 |
 | `tartan/research_score/__init__.py` | 包导入边界 | 迁移数据/训练/导航 |
-| `tartan/research_score/artifacts.py` | 训练/checkpoint与特征物化共用原子写出；临时文件位于目标数据卷，避免系统盘副本 | 迁移数据/训练/导航 |
+| `tartan/research_score/artifacts.py` | 训练/checkpoint与特征物化共用原子写出；实际metadata读取不一致时仅一次fadvise刷新再验证，持续不一致失败；临时文件位于目标数据卷 | 迁移数据/训练/导航 |
 | `tartan/research_score/configs/transfer_data.yaml` | 冻结8m/80点、完整episode split与原生数据构建参数 | 迁移数据/训练/导航 |
 | `tartan/research_score/configs/transfer_methods.yaml` | 四方法、8m/80点公平性与当前Preflight输入路径 | 迁移数据/训练/导航 |
 | `tartan/research_score/data/__init__.py` | 包导入边界 | 迁移数据/训练/导航 |
