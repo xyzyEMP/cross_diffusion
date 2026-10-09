@@ -1,0 +1,92 @@
+# Experiment 1：全量微调复现
+
+本文记录服务器 archive 中 experiment1 的全量（100%）训练与评估协议。本轮隔离训练和独立测试评估已于 2026-10-09 07:58:20 UTC 完成，退出码为 0；最终产物与归档结果的对比通过。
+
+## 代码与模型
+
+唯一训练入口是 `python -m scripts.train`，评估入口是 `python -m scripts.evaluate`。实验使用原始 `Diffusion_Planner`、缓存数据集、路线构造、normalizer 和导航指标实现。训练对整个模型做 full fine-tune，直接使用 diffusion loss；调度器按验证 loss 更新，checkpoint 按导航验证的 episode-macro SPL、SR、CR、goal progress 顺序选择，完全相同时选较早 epoch。模型前向与 source checkpoint 的加载语义保持原样，加载器优先选择 source checkpoint 的 EMA 权重。
+
+## 数据与固定协议
+
+使用已有缓存和 manifests，不重新生成 split。训练集有 16 个 episode、2048 个样本；验证集有 3 个 episode、384 个样本；导航验证清单有 35 个任务；测试集有 5 个 episode、63 个任务。训练/验证/测试 episode 数占比分别约 66.7%/12.5%/20.8%，这不是精确的 7:1:2 划分声明；split seed 未知。
+
+训练缓存优先使用 `/tj-share/cross_diffusion_workdir/cache/target_train_features_d029_extended.pt`，验证缓存使用 `/tj-share/cross_diffusion_workdir/cache/target_val_features.pt`。两种候选训练缓存的预算 100% 选中样本顺序与训练 tensor SHA-256 相同（2048 行，`43bce4acbc2ab3ed361e04b08d7c36e9929e7f8ec976d1574daac863a4d008a4`）；`d029_extended` 的 membership 元数据与冻结 manifest 一致。验证缓存与 384 行冻结验证 manifest 的有序 ID 一致。
+
+固定输入路径如下：
+
+- source args：`/zeron-vepfs/tjqc/cross-diffusion/checkpoints/args.json`。它包含模型维度和 state/observation normalizer；独立 `normalization.json` 不由这两个入口读取。
+- source checkpoint：`/zeron-vepfs/tjqc/cross-diffusion/checkpoints/model.pth`。归档训练加载器在其中的 `ema_state_dict` 与 `model` 间优先选择 EMA。归档 args 与此 source args 的 SHA-256 相同：`7e62b89a50953f133d55484777e54490f7f24e58feec1efcf696bcc7b91bdf10`。
+- 导航验证 manifest：`/tj-share/cross_diffusion_workdir/data/navigation/val.jsonl`（35 行）。
+- 测试 manifest：`/tj-share/cross_diffusion_workdir/archive/experiment1/inputs/navigation_test.jsonl`（63 行）。它与历史评估任务 ID 和 goal-distance 计算匹配；引用的 98 份验证/测试地图均已检查可读并记录当前 SHA-256，但没有历史地图 hash 可用于逐字节对照。
+- 训练和验证缓存如上；validation cache 对应的冻结 manifest 为 `/tj-share/cross_diffusion_workdir/data/frozen/20260911T170000Z_transfer_v123/transfer_primary/target_val_windows.jsonl`。
+
+训练 seed 为 11，batch size 为 64，最大/最小 epoch 为 100/30，每 5 epoch 做导航验证，每 10 epoch 更新 scheduler，导航检查 patience 为 8；AMP 开启，导航验证 inference seeds 为 11、23、47。optimizer 为 AdamW（lr `1e-4`、weight decay `1e-4`），梯度裁剪为 5。scheduler 为 `ReduceLROnPlateau`（factor 0.5、patience 2、relative threshold `1e-4`、min lr `5e-6`）。测试 inference seed 为 10000。
+
+## 已核对的历史结果
+
+归档历史训练在 epoch 85 因导航 patience 停止，选中 epoch 45（1440 updates）；最低验证 loss 出现在 epoch 47。历史测试 episode-macro 指标为 SPL `0.623229`、SR `0.679783`、CR `0.158766`。本轮最终训练记录与测试结果均与归档一致，详见本页末尾的验证结果。
+
+## 服务器重跑命令
+
+以下命令按已核对的服务器入口和参数编写。先由运行者将 `RUN_DIR` 指向一个全新、不存在的结果目录；旧的历史输出目录和 archive 目录不能复用。训练与评估会以 `exist_ok=False` 创建输出目录。训练命令需在项目根目录执行，并先创建 `$RUN_DIR/train` 父目录；评估也需先创建 `$RUN_DIR/eval`。source args/checkpoint、manifests、cache 和 route map 路径沿用现存文件。
+
+```bash
+PY=/root/miniconda3/envs/diffusion-planner/bin/python3.9
+SOURCE_ROOT=/zeron-vepfs/tjqc/cross-diffusion
+CODE_ROOT=/tj-share/cross_diffusion_workdir/reproductions/experiment1_100pct_slim_20261009071103Z/code
+RUN_DIR=/tj-share/cross_diffusion_workdir/reproductions/experiment1_100pct_slim_20261009071103Z
+cd "$CODE_ROOT"
+
+mkdir -p "$RUN_DIR/train" "$RUN_DIR/eval"
+test ! -e "$RUN_DIR/train/pretrain_finetune_100pct_seed11"
+test ! -e "$RUN_DIR/eval/pretrain_finetune_100pct_seed11"
+"$PY" -m scripts.train \
+  --train-cache /tj-share/cross_diffusion_workdir/cache/target_train_features_d029_extended.pt \
+  --val-cache /tj-share/cross_diffusion_workdir/cache/target_val_features.pt \
+  --val-navigation-manifest /tj-share/cross_diffusion_workdir/data/navigation/val.jsonl \
+  --args "$SOURCE_ROOT/checkpoints/args.json" \
+  --checkpoint "$SOURCE_ROOT/checkpoints/model.pth" \
+  --output "$RUN_DIR/train/pretrain_finetune_100pct_seed11" \
+  --budget 100 --batch-size 64 --seed 11 --max-epochs 100 --min-epochs 30 \
+  --navigation-every-epochs 5 --scheduler-every-epochs 10 \
+  --early-stop-patience 8 --inference-seeds 11 23 47 --amp
+
+"$PY" -m scripts.evaluate \
+  --method pretrain_finetune \
+  --checkpoint "$RUN_DIR/train/pretrain_finetune_100pct_seed11/navigation_best.pt" \
+  --args "$SOURCE_ROOT/checkpoints/args.json" \
+  --test-manifest /tj-share/cross_diffusion_workdir/archive/experiment1/inputs/navigation_test.jsonl \
+  --output "$RUN_DIR/eval/pretrain_finetune_100pct_seed11" \
+  --inference-seed 10000
+```
+
+上述 `CODE_ROOT` 和 `RUN_DIR` 是本轮隔离部署位置；再次运行必须选新的结果目录，不能复用已生成的 train/eval 子目录。不要运行 split/cache builder，也不要覆盖历史目录。训练成功结束后再检查测试 `summary.json` 和 `per_segment.csv`。
+
+## 复现边界
+
+历史训练的原始 argv 未保留，因此无法判定当时使用了哪一个等价训练 cache 文件名；本页指定 `d029_extended`，因为其选中 membership 与冻结 manifest 一致，选中 tensor 内容与另一个候选一致。历史评估 launcher 所指 manifest 当前缺失，使用的 archive candidate 与 63 个历史任务身份和 goal distance 一致；验证/测试引用地图均已记录当前 hash；没有历史地图 hash，不能据此证明其内容与历史时点相同。服务器 archive 和结果目录必须保留为历史资料。
+
+
+## 本轮验证状态
+
+独立前向 probe 已通过：精简前后同一首批 validation 输入的 sample IDs、严格加载结果、模型 state/input/prediction hash、loss 和前向前后 RNG 均逐项一致；AMP 开启，loss 均为 `0.6008548140525818`。
+
+最终 `metrics.json` 确认训练在 epoch 85 停止，共 2720 updates；导航最佳 checkpoint 为 epoch 45 / 1440 updates。85 行 Loss 记录、17 行导航验证记录与归档逐项一致（忽略耗时）；最佳 checkpoint 的 276 个模型张量逐元素一致。
+
+| episode-macro 指标 | 最佳 checkpoint 的 val | 独立 test |
+|---|---:|---:|
+| SPL | 0.650646 | 0.623229 |
+| SR | 0.705177 | 0.679783 |
+| CR | 0.211490 | 0.158766 |
+| goal progress | 0.735767 | 0.686076 |
+
+测试的 63 行逐任务记录及全部汇总指标与归档一致（忽略 inference latency）。本轮耗时与历史耗时不同，不纳入等价性结论。上述结论仅针对此次固定输入、模型和 100% 协议。
+
+最终证据均位于本次 `RUN_DIR`：
+
+- `comparison.json`：完整对比及日志完整性备注。
+- `train/pretrain_finetune_100pct_seed11/metrics.json`：训练与验证记录。
+- `train/pretrain_finetune_100pct_seed11/navigation_best.pt`：最佳模型。
+- `eval/pretrain_finetune_100pct_seed11/summary.json`、`per_segment.csv`：测试汇总与逐任务结果。
+
+训练期间曾观察到 stdout 日志文件大小与进程写入位置不一致，原因尚未查明；实时进度记录不能代替完整验证。以上结果以收尾生成的 metrics、checkpoint 和测试产物为准。本次旧运行目录保持原样；后续运行遵循 [通用路径约定](../07_experiments.md)。

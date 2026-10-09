@@ -1,0 +1,11 @@
+segment_length: 10.0
+segment_stride: 2.5
+region_search_radius: 3.0
+entry_threshold: 1.0
+exit_threshold: 1.0
+resample_points: 64
+mean_path_distance_threshold: 1.0
+max_path_distance_threshold: 2.0
+path_relation: similar
+visualization_count: 50
+random_seed: 0

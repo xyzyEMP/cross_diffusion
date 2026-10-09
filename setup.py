@@ -11,8 +11,12 @@ setuptools.setup(
     name="diffusion_planner",
     version="1.0.0",
     author="Zheng Yinan, Ruiming Liang, Kexin Zheng @ Tsinghua AIR",
-    packages=["diffusion_planner"],
+    packages=setuptools.find_packages(include=[
+        "configs*", "datasets*", "models*", "losses*", "engine*",
+        "evaluation*", "scripts*", "experiments*", "utils*", "tests*",
+    ]),
     package_dir={"": "."},
+    package_data={"": ["*.yaml", "*.sh", "*.ipynb"]},
     classifiers=[
         "Programming Language :: Python :: 3.9",
         "Operating System :: OS Independent",
