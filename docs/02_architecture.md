@@ -38,4 +38,4 @@ flowchart TD
 - `models/` 中的 Diffusion Planner 网络实现保持不变；当前训练和评估不构造额外 wrapper。
 - 配对窗口构建是独立数据准备路径，不被 train/evaluate 调用，也不代表仓库含 paired model training。
 
-每页维护一个主题；通用数据和输出路径见[07 实验与资源](07_experiments.md)，[Experiment 1 记录](experiments/experiment1.md)保存该次实验的固定协议、历史结果和运行状态。
+每页维护一个主题；通用数据和输出路径见[07 实验与资源](07_experiments.md)，[1_全量微调复现记录](experiments/1_全量微调复现.md)保存该次实验的固定协议、历史结果和运行状态。

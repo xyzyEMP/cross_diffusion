@@ -1,10 +1,10 @@
 # 训练流程
 
-唯一模型训练入口为 [`scripts/train.py`](../scripts/train.py)，执行 Experiment 1 的完整 `Diffusion_Planner` fine-tuning。该入口读取已有 train/validation cache、导航验证 manifest、source args 与 checkpoint；不会构建 split 或 cache。
+唯一模型训练入口为 [`scripts/train.py`](../scripts/train.py)，执行全量微调复现使用的完整 `Diffusion_Planner` fine-tuning。该入口读取已有 train/validation cache、导航验证 manifest、source args 与 checkpoint；不会构建 split 或 cache。
 
 ## 协议
 
-训练使用原始 diffusion loss，scheduler 依据 validation loss 更新，checkpoint 依据 navigation validation 选择。通用数据和输出路径及 CLI 命令见[实验与资源](07_experiments.md)。实验特有的参数、固定输入核对、历史结果与运行状态记录在[Experiment 1 记录](experiments/experiment1.md)，避免在通用流程页维护特定实验数据。
+训练使用原始 diffusion loss，scheduler 依据 validation loss 更新，checkpoint 依据 navigation validation 选择。通用数据和输出路径及 CLI 命令见[实验与资源](07_experiments.md)。实验特有的参数、固定输入核对、历史结果与运行状态记录在[1_全量微调复现记录](experiments/1_全量微调复现.md)，避免在通用流程页维护特定实验数据。
 
 ## 训练与 pair 输入的关系
 

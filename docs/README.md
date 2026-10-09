@@ -1,6 +1,6 @@
 # 文档导航
 
-当前文档说明 Diffusion Planner 模型训练/导航评估流程，以及独立的 TartanGround pair mining 数据工具。通用流程可用于后续实验；目前核验的模型实验是 ANYmal 的 Experiment 1。通用路径与运行命令见[实验与资源](07_experiments.md)，实验特有的输入核对、历史结果和运行状态记录在各实验页。
+当前文档说明 Diffusion Planner 模型训练/导航评估流程，以及独立的 TartanGround pair mining 数据工具。通用流程可用于后续实验；目前核验的模型实验是 ANYmal 的全量微调复现。通用路径与运行命令见[实验与资源](07_experiments.md)，实验特有的输入核对、历史结果和运行状态记录在各实验页。
 
 ## 当前代码
 
@@ -17,7 +17,7 @@
 
 ## 实验记录
 
-- [Experiment 1：全量微调复现](experiments/experiment1.md) | 已核对的固定输入、历史结果与当前重跑状态
+- [1_全量微调复现](experiments/1_全量微调复现.md) | 已核对的固定输入、历史结果与当前重跑状态
 
 ## 历史资料
 

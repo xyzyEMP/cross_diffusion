@@ -31,11 +31,11 @@
 | 临时文件 | 可使用 `/tmp` 中带任务标识的文件；需要保留的运行证据也保存到所属 `$RUN_DIR` |
 | 实验文档 | `docs/experiments/<experiment>.md`；记录 run ID、实际代码/输入/输出地址、参数、完成状态和结果。通用路径规则只维护在本页 |
 
-新实验在创建输出前确认 `$RUN_DIR` 不存在；每次运行使用新的日期前缀 ID，不复用已有目录。执行记录实际启动命令、输入/输出地址，并区分训练、验证和测试数据。路径未规定或不可用时先确认，不选择静默替代位置。新规则不要求改写历史文档；例如 [Experiment 1](experiments/experiment1.md) 保留该次运行的历史地址。
+新实验在创建输出前确认 `$RUN_DIR` 不存在；每次运行使用新的日期前缀 ID，不复用已有目录。执行记录实际启动命令、输入/输出地址，并区分训练、验证和测试数据。路径未规定或不可用时先确认，不选择静默替代位置。新规则不要求改写历史文档；例如 [1_全量微调复现](experiments/1_全量微调复现.md) 保留该次运行的历史地址。
 
 ## 已有输入示例
 
-下列 cache、验证 manifest 和测试 manifest 是已有输入，示例只读引用它们。测试 manifest 的历史位置及其实际记录见 [Experiment 1](experiments/experiment1.md)。新原始数据根 `$DATA_ROOT` 与包含这些已有 cache/manifest 的 `$INPUT_ROOT` 是不同用途，不应混用。manifest 内引用的地图文件也必须可读。
+下列 cache、验证 manifest 和测试 manifest 是已有输入，示例只读引用它们。测试 manifest 的历史位置及其实际记录见 [1_全量微调复现](experiments/1_全量微调复现.md)。新原始数据根 `$DATA_ROOT` 与包含这些已有 cache/manifest 的 `$INPUT_ROOT` 是不同用途，不应混用。manifest 内引用的地图文件也必须可读。
 
 ## CLI 参数
 

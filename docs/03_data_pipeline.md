@@ -1,6 +1,6 @@
 # 数据与数据流程
 
-模型运行使用已准备好的 target feature cache 与 navigation manifests。训练、验证和测试不在两个模型入口中重新生成 split 或缓存。通用路径和 CLI 参数见[实验与资源](07_experiments.md)；Experiment 1 的固定输入核对和样本数量见[实验记录](experiments/experiment1.md)。
+模型运行使用已准备好的 target feature cache 与 navigation manifests。训练、验证和测试不在两个模型入口中重新生成 split 或缓存。通用路径和 CLI 参数见[实验与资源](07_experiments.md)；1_全量微调复现的固定输入核对和样本数量见[实验记录](experiments/1_全量微调复现.md)。
 
 ## 模型运行输入
 
@@ -10,7 +10,7 @@ source args 提供 Diffusion Planner 构造参数及嵌入的 normalizer；sourc
 
 ## 独立 pair mining
 
-`datasets/pair/run_pair_mining.py` 从 `<data-root>/Data_<embodiment>/*/pose_lcam_front.txt` 读取两组 TartanGround pose，按配置抽取局部窗口并匹配，写出 `candidates.json`、`candidates.csv` 和抽样可视化。该工具是可选的数据准备步骤，产物不自动进入缓存、导航 manifests 或 Experiment 1 训练。
+`datasets/pair/run_pair_mining.py` 从 `<data-root>/Data_<embodiment>/*/pose_lcam_front.txt` 读取两组 TartanGround pose，按配置抽取局部窗口并匹配，写出 `candidates.json`、`candidates.csv` 和抽样可视化。该工具是可选的数据准备步骤，产物不自动进入缓存、导航 manifests 或全量微调复现训练。
 
 可用命令与实际 argparse 一致：
 

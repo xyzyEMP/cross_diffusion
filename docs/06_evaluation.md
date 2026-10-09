@@ -4,7 +4,7 @@
 
 ## 任务与路径
 
-每条 manifest 记录对应一个独立任务。评估按当前状态和固定 goal 生成 route features，调用模型预测轨迹并逐段推进；碰撞、成功、停滞或路线失败由几何规则判定。它不运行机器人动力学、物理仿真或关节控制。通用路径和 CLI 参数见[实验与资源](07_experiments.md)；Experiment 1 的测试 manifest 和输入核对见[实验记录](experiments/experiment1.md)。
+每条 manifest 记录对应一个独立任务。评估按当前状态和固定 goal 生成 route features，调用模型预测轨迹并逐段推进；碰撞、成功、停滞或路线失败由几何规则判定。它不运行机器人动力学、物理仿真或关节控制。通用路径和 CLI 参数见[实验与资源](07_experiments.md)；全量微调复现的测试 manifest 和输入核对见[实验记录](experiments/1_全量微调复现.md)。
 
 每次运行使用新输出目录，实际命令见[实验与资源](07_experiments.md)。
 

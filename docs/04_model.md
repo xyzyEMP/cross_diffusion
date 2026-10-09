@@ -6,7 +6,7 @@
 
 [`models/diffusion/planner.py`](../models/diffusion/planner.py) 连接场景 encoder 与 diffusion decoder。encoder 处理 ego 当前状态、邻车历史、静态物体、lane 和 route 特征；decoder 通过 DiT 在场景与路线条件下预测/去噪轨迹，采样实现位于 `models/diffusion/sampling.py` 与 SDE/solver 模块。
 
-模型构造参数与 state/observation normalizer 由 CLI 传入的 args JSON 提供；source checkpoint 路径见[实验与资源](07_experiments.md)。Experiment 1 已核实的具体权重文件及加载证据见[实验记录](experiments/experiment1.md)。
+模型构造参数与 state/observation normalizer 由 CLI 传入的 args JSON 提供；source checkpoint 路径见[实验与资源](07_experiments.md)。全量微调复现已核实的具体权重文件及加载证据见[实验记录](experiments/1_全量微调复现.md)。
 
 ## 运行边界
 
